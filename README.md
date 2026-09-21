@@ -63,7 +63,7 @@ with open(saves.get_save_path("save.json"), "w") as f: json.dump(state, f)
 syncBrowserSaves()   # no-op outside the browser; required after every write under Pyodide
 ```
 
-A slot whose primary file will not parse stays listed as damaged and stays claimed, so a new game is never pointed at an occupied directory.
+`chooseSlot(ui, saves, "Tidewater", describe)` runs the opening menu — load, new, delete, quit — and returns `("load", n)`, `("new", n)` or `None`. A slot whose primary file will not parse stays listed as damaged and stays claimed, so a new game is never pointed at an occupied directory.
 
 ### Unlocks and NPCs
 
