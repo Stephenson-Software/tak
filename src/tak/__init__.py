@@ -8,7 +8,7 @@ JSON Schema validation, a progressive-disclosure unlock engine, NPC dialogue,
 and the clock formatting a day-based game shows in its header.
 
 Extracted from FishE (https://github.com/Stephenson-Software/FishE); Tidewater
-is the first game built on it and FishE the second.
+is the first game built on it; FishE is being moved onto it.
 """
 
 __version__ = "0.1.0"

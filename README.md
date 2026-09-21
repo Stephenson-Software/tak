@@ -2,7 +2,7 @@
 
 A text-adventure kit. One user-interface contract with three front-ends behind it — a terminal, a browser that polls a server, and a browser tab that runs the whole game itself under [Pyodide](https://pyodide.org) — plus the pieces a menu-driven text game needs around it: numbered save slots with JSON Schema validation, a progressive-disclosure unlock engine, NPC dialogue with conditional lines, and clock formatting for a day-based header.
 
-Extracted from [FishE](https://github.com/Stephenson-Software/FishE). [Tidewater](https://github.com/Stephenson-Software/Tidewater) is the first game built on it; FishE is the second.
+Extracted from [FishE](https://github.com/Stephenson-Software/FishE). [Tidewater](https://github.com/Stephenson-Software/Tidewater) is the first game built on it; FishE is being moved onto it.
 
 ## Install
 
@@ -114,5 +114,11 @@ pip install -e '.[dev]'
 ```
 
 ## License
+This project is licensed under the **Stephenson Software Non-Commercial License (Stephenson-NC)**.  
+© 2026 Daniel McCoy Stephenson. All rights reserved.  
 
-[Stephenson-NC](LICENSE) — non-commercial use.
+You may use, modify, and share this software for **non-commercial purposes only**.  
+Commercial use is prohibited without explicit written permission from the copyright holder.  
+
+Full license text: [Stephenson-NC License](https://github.com/Stephenson-Software/stephenson-nc-license) (also in [LICENSE](LICENSE))  
+SPDX Identifier: `Stephenson-NC`
