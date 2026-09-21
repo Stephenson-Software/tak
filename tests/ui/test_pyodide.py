@@ -104,7 +104,7 @@ def test_the_front_end_works_with_no_assets_on_disk(fakeJs, monkeypatch):
     import tak.web
 
     monkeypatch.setattr(tak.web, "ASSET_DIRECTORY", "/no/such/directory")
-    monkeypatch.setattr(webModule, "_clientAssetCache", {})
+    webModule._clientAssetCache.clear()
     ui = makePyodideUI(fakeJs)
     fakeJs.writePlayerInput("1")
     assert ui.showOptions("The Docks", ["Fish", "Leave"]) == "1"
