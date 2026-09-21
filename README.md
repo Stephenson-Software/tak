@@ -14,6 +14,8 @@ Python 3.8+. The only dependency is `jsonschema`.
 
 ## What a game writes
 
+[`examples/minimal_game.py`](examples/minimal_game.py) is the whole of it in 120 lines: three scenes, one villager with a line that unlocks, a header, no saves. `python3 examples/minimal_game.py` plays it in the terminal, `--web` in a browser. Copy it and replace the words.
+
 A game is a synchronous loop that talks to the player through `BaseUserInterface`'s primitives and never imports a concrete front-end:
 
 ```python
