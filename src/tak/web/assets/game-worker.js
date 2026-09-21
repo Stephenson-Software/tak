@@ -38,7 +38,7 @@
 // The initial restore still happens here in the Worker because it runs before
 // Python starts, when nothing is blocking the event loop yet.
 
-const DEFAULT_PYODIDE_URL = 'https://cdn.jsdelivr.net/pyodide/v0.26.0/full/pyodide.js';
+const DEFAULT_PYODIDE_URL = 'https://cdn.jsdelivr.net/pyodide/v0.29.5/full/pyodide.js';
 const IDB_STORE   = 'files';
 const IDB_VERSION = 1;
 

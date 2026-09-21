@@ -12,7 +12,8 @@ jobs:
     strategy:
       matrix:
         # 3.8 is the oldest interpreter a game on the kit is played from (an
-        # Android/UserLand phone); 3.12 is what Pyodide 0.26 runs in the browser.
+        # Android/UserLand phone); Pyodide 0.29 runs 3.13 in the browser, and 3.12
+        # is the nearest hosted interpreter that exercises the same syntax.
         python-version: ['3.8', '3.12']
     steps:
     - name: Checkout code
