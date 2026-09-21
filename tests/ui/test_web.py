@@ -350,7 +350,7 @@ def test_missing_asset_is_explained(monkeypatch):
     import tak.web
 
     monkeypatch.setattr(tak.web, "ASSET_DIRECTORY", "/no/such/directory")
-    monkeypatch.setattr(webModule, "_clientAssetCache", {})
+    webModule._clientAssetCache.clear()
     with pytest.raises(RuntimeError) as error:
         makeWebUI().page()
     assert "client.css" in str(error.value)
