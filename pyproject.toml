@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tak"
-version = "0.1.0"
+version = "0.1.1"
 description = "Text-adventure kit: one UI contract with console, server-web and in-browser (Pyodide) front-ends, save slots with schema validation, an unlock engine and NPC dialogue - extracted from FishE."
 readme = "README.md"
 requires-python = ">=3.8"

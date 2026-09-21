@@ -94,7 +94,9 @@ def test_delete_flow_removes_the_slot_and_returns_to_the_menu(tmp_path):
     assert chooseSlot(ui, manager(str(tmp_path)), "Tidewater", describe) == ("new", 1)
     assert ui.dialogues == ["Slot 1 deleted."]
     assert not os.path.exists(tmp_path / "slot_1")
+    assert ui.menus[1][0] == "Delete a Save File"
     assert ui.menus[1][1] == ["Delete Slot 1", "Cancel"]
+    assert ui.menus[2][1] == ["Yes, delete it", "No, keep it"]
 
 
 def test_delete_can_be_cancelled_twice_over(tmp_path):
@@ -104,3 +106,22 @@ def test_delete_can_be_cancelled_twice_over(tmp_path):
     assert chooseSlot(ui, manager(str(tmp_path)), "Tidewater", describe) is None
     assert os.path.exists(tmp_path / "slot_1")
     assert ui.dialogues == []
+
+
+def test_a_damaged_choice_a_front_end_let_through_is_explained(tmp_path):
+    writeSlot(tmp_path, 1, content="{oops")
+    # A conforming front-end never returns "1" here; a broken one might.
+    ui = ScriptedUI(["1", "2"])
+    assert chooseSlot(ui, manager(str(tmp_path)), "Tidewater", describe) == ("new", 2)
+    assert "could not be read" in ui.dialogues[0]
+    assert "save.json" in ui.dialogues[0]
+    assert "Delete a Save File" in ui.dialogues[0]
+
+
+def test_a_failed_delete_is_reported(tmp_path, monkeypatch):
+    writeSlot(tmp_path, 1)
+    m = manager(str(tmp_path))
+    monkeypatch.setattr(m, "delete_save_slot", lambda slot: False)
+    ui = ScriptedUI(["3", "1", "1", "4"])  # the slot is still there, so Quit is 4
+    assert chooseSlot(ui, m, "Tidewater", describe) is None
+    assert ui.dialogues == ["Failed to delete Slot 1."]

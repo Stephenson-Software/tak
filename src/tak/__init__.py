@@ -11,7 +11,7 @@ Extracted from FishE (https://github.com/Stephenson-Software/FishE); Tidewater
 is the first game built on it; FishE is being moved onto it.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from tak.prompt import Prompt  # noqa: F401
 from tak.npc import NPC  # noqa: F401

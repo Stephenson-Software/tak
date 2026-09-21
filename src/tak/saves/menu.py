@@ -59,25 +59,42 @@ def chooseSlot(userInterface, saveFileManager, title, describe):
             deleteSlot(userInterface, saveFileManager, title, save_files)
         elif kind == "quit":
             return None
-        # "damaged": a conforming front-end never returns it; loop regardless.
+        elif kind == "damaged":
+            # A conforming front-end refuses to return an unavailable option's
+            # number, so this should be unreachable. It is handled anyway
+            # because the alternative is falling out of this if-chain and
+            # silently re-rendering the same menu forever, which is an
+            # unexplained hang rather than a visible bug - and a new front-end
+            # is exactly the thing that would get this wrong.
+            userInterface.showDialogue(
+                "Slot %d can't be loaded: its %s could not be read.\n\nIt has "
+                "been left alone rather than overwritten, so you can still copy "
+                "the folder somewhere safe. To use the slot again, choose "
+                "'Delete a Save File'." % (arg, saveFileManager.primaryFile)
+            )
 
 
 def deleteSlot(userInterface, saveFileManager, title, save_files):
-    """Offer the slots for deletion. Returns True if one was deleted."""
+    """Offer the slots for deletion. Returns True if one was deleted.
+
+    A damaged slot is tagged here too: this menu is the only way to reclaim
+    it, so the player has to be able to tell which row is the unreadable one
+    they came here to clear. ``title`` is accepted for symmetry with
+    chooseSlot and reserved for a front-end that wants to show it."""
     options = []
     for save in save_files:
         damaged = " (damaged)" if save["metadata"].get("unreadable") else ""
         options.append("Delete Slot %d%s" % (save["slot"], damaged))
     options.append("Cancel")
 
-    choice = int(userInterface.showOptions(title + " - Delete", options))
-    if choice == len(options):
+    choice = int(userInterface.showOptions("Delete a Save File", options))
+    if choice == len(options):  # Cancel
         return False
     slot = save_files[choice - 1]["slot"]
 
     confirm = int(
         userInterface.showOptions(
-            "Delete Slot %d? This cannot be undone." % slot, ["Yes, delete it", "No"]
+            "Permanently delete Slot %d?" % slot, ["Yes, delete it", "No, keep it"]
         )
     )
     if confirm != 1:
@@ -85,5 +102,5 @@ def deleteSlot(userInterface, saveFileManager, title, save_files):
     if saveFileManager.delete_save_slot(slot):
         userInterface.showDialogue("Slot %d deleted." % slot)
         return True
-    userInterface.showDialogue("Slot %d could not be deleted." % slot)
+    userInterface.showDialogue("Failed to delete Slot %d." % slot)
     return False

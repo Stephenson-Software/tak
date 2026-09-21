@@ -7,7 +7,7 @@ Extracted from [FishE](https://github.com/Stephenson-Software/FishE). [Tidewater
 ## Install
 
 ```bash
-pip install "tak @ git+https://github.com/Stephenson-Software/tak@v0.1.0"
+pip install "tak @ git+https://github.com/Stephenson-Software/tak@v0.1.1"
 ```
 
 Python 3.8+. The only dependency is `jsonschema`.
