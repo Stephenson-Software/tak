@@ -341,9 +341,15 @@ def test_factory_reads_the_environment_for_the_web_front_end(monkeypatch):
         ui.cleanup()
 
 
-def test_factory_rejects_an_unknown_type():
-    with pytest.raises(ValueError):
+def test_factory_rejects_an_unknown_type_and_lists_the_accepted_ones():
+    with pytest.raises(ValueError) as error:
         createUserInterface("teletype", Prompt())
+    message = str(error.value)
+    assert "'teletype'" in message
+    # Every member is named, so a caller who passed the enum's value ("console")
+    # or a misspelling is told exactly what would have been accepted.
+    for member in UIType:
+        assert "UIType.%s" % member.name in message
 
 
 def test_missing_asset_is_explained(monkeypatch):

@@ -149,7 +149,14 @@ class SaveFileManager:
     def get_save_path(self, filename):
         """Get the full path for a save file in the selected slot"""
         if self.selected_save_slot is None:
-            raise ValueError("No save slot selected")
+            # Name the call that was skipped: a game reaching for a path
+            # straight after building the manager has not chosen a slot yet.
+            raise ValueError(
+                "SaveFileManager.get_save_path(%r) was called before a slot was "
+                "selected. Call select_save_slot(n) first - or open the game on "
+                "tak.saves.chooseSlot(), which selects the slot the player "
+                "picked." % (filename,)
+            )
 
         slot_name = f"slot_{self.selected_save_slot}"
         slot_path = os.path.join(self.data_directory, slot_name)

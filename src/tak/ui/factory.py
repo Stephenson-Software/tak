@@ -52,4 +52,10 @@ def createUserInterface(
             currentPrompt, header, title=title, tagline=tagline, tip=tip
         )
     else:
-        raise ValueError("Unsupported UI type: %r" % (uiType,))
+        # List the members: the usual mistake is passing the enum's value
+        # ("console") or a misspelled name, and the bad value alone does not
+        # say what would have been accepted.
+        raise ValueError(
+            "Unsupported UI type: %r. Pass one of the tak.ui.UIType members: %s."
+            % (uiType, ", ".join("UIType.%s" % member.name for member in UIType))
+        )
