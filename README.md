@@ -41,7 +41,7 @@ ui.cleanup()
 | `timedKeyPress(message)` | Seconds until the player reacts. |
 | `showInteractiveDialogue(npc)` | A conversation menu built from an `NPC`'s options. |
 
-The `header` callable is the game's status line, read fresh before every menu. The kit knows nothing about days or money — chips are whatever the game says, and an optional `class` on a chip (`{"text": "Energy: 4/10", "class": "low"}`) lets the browser style it.
+The `header` callable is the game's status line, read fresh before every menu. Its `title` is the browser tab's title (the console ignores it); the page heading is the `title` given to `createUserInterface`. The kit knows nothing about days or money — chips are whatever the game says, and an optional `class` on a chip (`{"text": "Energy: 4/10", "class": "low"}`) lets the browser style it.
 
 ### Front-ends
 
