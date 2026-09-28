@@ -104,7 +104,9 @@ def test_get_save_path_needs_a_slot_and_creates_it(tmp_path):
     m = SaveFileManager(str(tmp_path))
     with pytest.raises(ValueError) as error:
         m.get_save_path("save.json")
-    # The refusal names the call that was skipped and the menu that makes it.
+    # The refusal names the call that was skipped and the menu that makes it,
+    # and still opens with the words games have matched on since 0.1.0.
+    assert str(error.value).startswith("No save slot selected")
     assert "save.json" in str(error.value)
     assert "select_save_slot" in str(error.value)
     assert "chooseSlot" in str(error.value)
