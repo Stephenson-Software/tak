@@ -151,11 +151,13 @@ class SaveFileManager:
         if self.selected_save_slot is None:
             # Name the call that was skipped: a game reaching for a path
             # straight after building the manager has not chosen a slot yet.
+            # The message still opens with "No save slot selected", the wording
+            # of 0.1.x-0.2.x, because games match on it (FishE's own tests do).
             raise ValueError(
-                "SaveFileManager.get_save_path(%r) was called before a slot was "
-                "selected. Call select_save_slot(n) first - or open the game on "
-                "tak.saves.chooseSlot(), which selects the slot the player "
-                "picked." % (filename,)
+                "No save slot selected: SaveFileManager.get_save_path(%r) was "
+                "called before a slot was selected. Call select_save_slot(n) "
+                "first - or open the game on tak.saves.chooseSlot(), which "
+                "selects the slot the player picked." % (filename,)
             )
 
         slot_name = f"slot_{self.selected_save_slot}"
