@@ -134,7 +134,7 @@ def test_taken_port_is_explained(gameRoot):
     assert "Tidewater" in str(error.value) and "TIDEWATER_WEB_PORT" in str(error.value)
 
 
-def test_bundle_carries_the_game_and_the_kit(tmp_path):
+def test_bundle_carries_the_game_and_the_kit(tmp_path, capsys):
     (tmp_path / "src" / "game").mkdir(parents=True)
     (tmp_path / "src" / "game" / "__init__.py").write_text("")
     (tmp_path / "src" / "game" / "__pycache__").mkdir()
@@ -159,6 +159,9 @@ def test_bundle_carries_the_game_and_the_kit(tmp_path):
     assert "src/tak/web/assets/client.js" in names
     assert not any(n.endswith(".pyc") for n in names)
     assert "missing.txt" not in names
+    err = capsys.readouterr().err
+    assert "missing.txt" in err and str(tmp_path) in err
+    assert "version.txt" not in err and "pyodide_main.py" not in err
 
 
 def test_bundle_can_leave_the_kit_out(tmp_path):
