@@ -13,6 +13,7 @@ A game calls this from its own web/build_zip.py::
 """
 
 import os
+import sys
 import zipfile
 
 import tak
@@ -44,7 +45,9 @@ def build(
     """Write the bundle. Paths in sourceDirectories/extraFiles are relative to
     root and are stored under the same relative paths, so the unpacked tree
     matches a checkout - which is what makes the game's cwd-relative schema
-    paths resolve inside /game."""
+    paths resolve inside /game. An extraFiles entry that does not exist is
+    skipped (a file only generated at release may be absent), with a warning
+    on stderr naming it so a mistyped entry point is caught at build time."""
     outputPath = os.path.join(root, outputPath)
     os.makedirs(os.path.dirname(outputPath), exist_ok=True)
     with zipfile.ZipFile(outputPath, "w", zipfile.ZIP_DEFLATED) as bundle:
@@ -56,6 +59,12 @@ def build(
             full = os.path.join(root, relative)
             if os.path.exists(full):
                 bundle.write(full, relative.replace(os.sep, "/"))
+            else:
+                print(
+                    "build: skipped extraFiles entry %r - no such file under %s"
+                    % (relative, root),
+                    file=sys.stderr,
+                )
         if includeTak:
             _addTree(bundle, os.path.dirname(os.path.abspath(tak.__file__)), "src/tak")
     print("Built %s" % outputPath)

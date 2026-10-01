@@ -105,7 +105,7 @@ from tak.web.bundle import build;  build(ROOT, extraFiles=("version.txt", "web/p
 from tak.web.serve import main;    main(ROOT, title="Tidewater", envPrefix="TIDEWATER")
 ```
 
-`build` puts the game's `src/` and `schemas/` and the tak package itself into `web/game.zip`; `serve` sends the `Cross-Origin-Opener-Policy`/`Cross-Origin-Embedder-Policy` headers SharedArrayBuffer needs and serves the kit's assets at `/tak/`. Any proxy in front of it must preserve those headers.
+`build` puts the game's `src/` and `schemas/` and the tak package itself into `web/game.zip` (an `extraFiles` entry that does not exist is skipped, with a warning on stderr naming it); `serve` sends the `Cross-Origin-Opener-Policy`/`Cross-Origin-Embedder-Policy` headers SharedArrayBuffer needs and serves the kit's assets at `/tak/`. Any proxy in front of it must preserve those headers.
 
 ## Development
 
