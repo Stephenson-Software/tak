@@ -7,7 +7,7 @@ Extracted from [FishE](https://github.com/Stephenson-Software/FishE). [Tidewater
 ## Install
 
 ```bash
-pip install "tak @ git+https://github.com/Stephenson-Software/tak@v0.2.0"
+pip install "tak @ git+https://github.com/Stephenson-Software/tak@v0.3.0"
 ```
 
 Python 3.8+. The only dependency is `jsonschema`.
@@ -111,7 +111,8 @@ from tak.web.serve import main;    main(ROOT, title="Tidewater", envPrefix="TIDE
 
 A small game that only uses `input()` and `print()` does not need rewriting
 against the kit to be played in a browser. `tak.web.console` runs it **unmodified**
-under Pyodide:
+under Pyodide. It is on `main` and not yet in a tagged release, so install from `main`
+rather than the tag above to use it:
 
 - Its prompts and output go to a terminal on the page. The terminal uses a real text field, so a
   phone's keyboard, paste and autocorrect-off all work.
