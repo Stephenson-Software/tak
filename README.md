@@ -107,6 +107,35 @@ from tak.web.serve import main;    main(ROOT, title="Tidewater", envPrefix="TIDE
 
 `build` puts the game's `src/` and `schemas/` and the tak package itself into `web/game.zip` (an `extraFiles` entry that does not exist is skipped, with a warning on stderr naming it); `serve` sends the `Cross-Origin-Opener-Policy`/`Cross-Origin-Embedder-Policy` headers SharedArrayBuffer needs and serves the kit's assets at `/tak/`. Any proxy in front of it must preserve those headers.
 
+## Running an existing console game in the browser
+
+A small game that only uses `input()` and `print()` does not need rewriting
+against the kit to be played in a browser. `tak.web.console` runs it **unmodified**
+under Pyodide:
+
+- Its prompts and output go to a terminal on the page. The terminal uses a real text field, so a
+  phone's keyboard, paste and autocorrect-off all work.
+- `input()` blocks on the same SharedArrayBuffer ring as the kit's own front-end.
+- `os.system("cls")` or `"clear"` and ANSI clear-screen codes clear the terminal. Other escape
+  codes are dropped.
+- Any file the program creates or changes under its directory (a save file, a `saves/` folder) is
+  kept in the browser's IndexedDB and restored on the next visit.
+
+```python
+# web/build_zip.py
+from tak.web.bundle import build
+from tak.web.console import page
+open("web/index.html", "w").write(
+    page(title="Guess My Word", entry="src/guessMyWord.py", idbName="guess-my-word-files"))
+build(ROOT, sourceDirectories=("src",), extraFiles=("version.txt",))
+```
+
+`entry` is run as `__main__` with its own directory as the working directory. `idbName` must be
+unique per game and must never change once players have saves under it. The page loads
+`/tak/console.css`, `/tak/console.js` and `/tak/console-worker.js`, which `tak.web.serve` and
+[arcade](https://github.com/Stephenson-Software/arcade) both serve. Like every tak browser build,
+it must be served cross-origin isolated.
+
 ## Development
 
 ```bash
