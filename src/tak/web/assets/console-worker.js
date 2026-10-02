@@ -231,12 +231,33 @@ self.onmessage = async (event) => {
                 '(your earlier saves are untouched). Reloading the page usually fixes this.' });
         }
         globalThis.takConsoleClear = () => self.postMessage({ type: 'clear' });
+        // time.sleep() of our own. Pyodide picks its sleep strategy from the
+        // browser it thinks it is in, and with a Safari user agent that path
+        // tries to suspend the WebAssembly stack and dies with "SuspendError:
+        // trying to suspend JS frames" (reproduced: any program that sleeps,
+        // e.g. Kreatures between ticks). This runtime already requires
+        // SharedArrayBuffer, so Atomics.wait on a private cell is a real,
+        // blocking sleep in every browser it supports.
+        const sleepCell = new Int32Array(new SharedArrayBuffer(4));
+        globalThis.takConsoleSleep = (seconds) => {
+            const ms = Number(seconds) * 1000;
+            if (ms > 0) Atomics.wait(sleepCell, 0, 0, ms);
+        };
 
         self.postMessage({ type: 'status', msg: '' });
         const entry = config.entry || 'main.py';
         const code = await pyodide.runPythonAsync(`
 import os, runpy, sys, traceback
-from js import takConsoleClear
+from js import takConsoleClear, takConsoleSleep
+import time as _time
+
+def _sleep(seconds):
+    seconds = float(seconds)
+    if seconds < 0:
+        raise ValueError("sleep length must be non-negative")
+    takConsoleSleep(seconds)
+
+_time.sleep = _sleep
 
 _entry = os.path.join(${JSON.stringify(GAME_DIRECTORY)}, ${JSON.stringify(entry)})
 os.chdir(os.path.dirname(_entry))

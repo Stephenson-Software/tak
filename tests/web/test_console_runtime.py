@@ -78,3 +78,12 @@ def test_a_failed_restore_never_syncs():
     assert "syncFiles = makeFileSync(pyodide, pristine, restore.paths, log);" in worker
     assert worker.count("makeFileSync(") == 2  # the definition and the one guarded call
     assert "restored.has(path) ||" in worker
+
+
+def test_the_runtime_brings_its_own_blocking_sleep():
+    # Pyodide's own sleep path dies with a SuspendError under a Safari user
+    # agent; the console runtime replaces time.sleep with Atomics.wait.
+    worker = tak.web.readAsset("console-worker.js")
+    assert "globalThis.takConsoleSleep" in worker
+    assert "Atomics.wait(sleepCell, 0, 0, ms)" in worker
+    assert "_time.sleep = _sleep" in worker
