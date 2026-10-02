@@ -2,12 +2,15 @@
 """The browser side of the kit.
 
 assets/   client.js + client.css (the renderer both web front-ends share),
-          boot.js + game-worker.js (the Pyodide transport and runtime loader)
+          boot.js + game-worker.js (the Pyodide transport and runtime loader),
+          console.js + console.css + console-worker.js (the console runtime)
 page.py   the single page the server-backed front-end (tak.ui.web) serves,
           with the kit's client and stylesheet inlined
 serve.py  the static server for a Pyodide build - sends the COOP/COEP headers
           SharedArrayBuffer needs, and serves the kit's assets at /tak/
 bundle.py builds the game.zip the Worker downloads, with this package inside
+console.py the page for an unmodified input()/print() program run in the
+          browser by the console runtime
 """
 
 import os

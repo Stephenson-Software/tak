@@ -1,0 +1,65 @@
+/* The terminal console.js draws. Sized for a phone first: 16px text keeps iOS
+   from zooming into the field, and the pane takes the height the keyboard
+   leaves rather than a fixed number of rows. */
+.tak-console {
+  --tak-console-bg: #0d1117;
+  --tak-console-fg: #d6e2ee;
+  --tak-console-dim: #7d8b99;
+  --tak-console-accent: #7fb0d0;
+  --tak-console-error: #ff8a8a;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 60rem;
+  margin: 0 auto;
+}
+.tak-console-status { color: var(--tak-console-accent); }
+.tak-console-status.error { color: var(--tak-console-error); }
+.tak-console-screen {
+  background: var(--tak-console-bg);
+  color: var(--tak-console-fg);
+  font: 16px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 8px;
+  min-height: 12rem;
+  height: 60vh;
+  height: 60dvh;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tak-console-echo { color: var(--tak-console-accent); }
+.tak-console-stderr { color: var(--tak-console-error); }
+.tak-console-note { color: var(--tak-console-dim); font-style: italic; }
+.tak-console-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.tak-console-caret {
+  color: var(--tak-console-accent);
+  font: 16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.tak-console-input {
+  flex: 1;
+  min-width: 0;
+  font: 16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  padding: 0.6rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid #3a4652;
+  background: #161b22;
+  color: var(--tak-console-fg);
+}
+.tak-console-input:focus { outline: 2px solid var(--tak-console-accent); outline-offset: 1px; }
+.tak-console-input:disabled { opacity: 0.55; }
+.tak-console-send {
+  font: 600 15px system-ui, sans-serif;
+  padding: 0.6rem 1rem;
+  min-height: 44px;
+  border-radius: 6px;
+  border: 0;
+  background: var(--tak-console-accent);
+  color: #0d1117;
+}
+.tak-console-send:disabled { opacity: 0.45; }
