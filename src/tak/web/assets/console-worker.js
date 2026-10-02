@@ -9,6 +9,8 @@
 //                    { type: 'clear' }             the program cleared the screen
 //                    { type: 'waiting' }           the program is reading a line
 //                    { type: 'files', files }      every file to persist (see below)
+//                    { type: 'nosave', msg }       kept files could not be read, so
+//                                                  nothing will be written this session
 //                    { type: 'exit', code }        the program finished
 //                    { type: 'error', msg }        the runtime itself failed
 //
@@ -55,8 +57,15 @@ function idbOpen(name) {
 
 // Before Python starts (so IndexedDB callbacks still fire): write every kept
 // file back over the unpacked bundle. Never rejects - a browser that will not
-// hand stored data back starts the player fresh rather than not at all.
+// hand stored data back starts the player fresh rather than not at all - but
+// it reports whether the read succeeded, because what happens next depends on
+// it: the page REPLACES the stored files with each sync, so syncing after a
+// failed read would replace the player's saves with nothing.
+//
+// Resolves to { ok, paths }: ok is false if the store could not be read, and
+// paths is every file that was written back.
 async function restoreFiles(pyodide, idbName, log) {
+    const paths = new Set();
     try {
         const db = await Promise.race([
             idbOpen(idbName),
@@ -80,12 +89,23 @@ async function restoreFiles(pyodide, idbName, log) {
                 directory += '/' + parts[i];
                 try { pyodide.FS.mkdir(directory); } catch {}
             }
-            try { pyodide.FS.writeFile(path, content); } catch (e) { console.warn(log, 'could not restore', path, e); }
+            try {
+                pyodide.FS.writeFile(path, content);
+                paths.add(path);
+            } catch (e) {
+                // A file that cannot be written back cannot be kept either:
+                // treat the whole restore as failed rather than drop it.
+                console.warn(log, 'could not restore', path, e);
+                db.close();
+                return { ok: false, paths };
+            }
         }
         if (entries.length) console.log(log, `${entries.length} kept file(s) restored`);
         db.close();
+        return { ok: true, paths };
     } catch (err) {
-        console.warn(log, 'restore skipped (starting fresh):', err);
+        console.warn(log, 'could not read kept files:', err);
+        return { ok: false, paths };
     }
 }
 
@@ -102,17 +122,22 @@ function walkFiles(pyodide, root, visit) {
     }
 }
 
-// A file is "the program's" if it was not in the bundle as unpacked, or has
-// been written since (its mtime moved). Bundle files the program never touched
-// are not kept: a new deploy of the game must win over a stale copy.
-function makeFileSync(pyodide, pristine, log) {
+// A file is kept if it was restored from storage (it is the player's, whatever
+// its timestamp says - a restore can land in the same millisecond as the
+// unpack), if it was not in the bundle as unpacked, or if it has been written
+// since (its mtime moved). Bundle files the program never touched are not
+// kept: a new deploy of the game must win over a stale copy. A kept file the
+// program deletes is gone from the walk, so the deletion sticks.
+function makeFileSync(pyodide, pristine, restored, log) {
     let lastSignature = null;
     return () => {
         const changed = [];
         walkFiles(pyodide, GAME_DIRECTORY, (path, stat) => {
             const mtime = stat.mtime instanceof Date ? stat.mtime.getTime() : Number(stat.mtime);
             const original = pristine.get(path);
-            if (original === undefined || original !== mtime) changed.push([path, mtime, stat.size]);
+            if (restored.has(path) || original === undefined || original !== mtime) {
+                changed.push([path, mtime, stat.size]);
+            }
         });
         const signature = JSON.stringify(changed);
         if (signature === lastSignature) return;  // nothing new since the last prompt
@@ -194,8 +219,17 @@ self.onmessage = async (event) => {
         walkFiles(pyodide, GAME_DIRECTORY, (path, stat) => {
             pristine.set(path, stat.mtime instanceof Date ? stat.mtime.getTime() : Number(stat.mtime));
         });
-        await restoreFiles(pyodide, config.idbName || 'tak-console-files', log);
-        syncFiles = makeFileSync(pyodide, pristine, log);
+        const restore = await restoreFiles(pyodide, config.idbName || 'tak-console-files', log);
+        if (restore.ok) {
+            syncFiles = makeFileSync(pyodide, pristine, restore.paths, log);
+        } else {
+            // Never sync after a failed read: the page replaces the store with
+            // each sync, which would erase saves this session never saw. The
+            // game still runs; this session's progress just is not kept.
+            self.postMessage({ type: 'nosave', msg:
+                "Your saved files could not be read, so this session's progress won't be saved " +
+                '(your earlier saves are untouched). Reloading the page usually fixes this.' });
+        }
         globalThis.takConsoleClear = () => self.postMessage({ type: 'clear' });
 
         self.postMessage({ type: 'status', msg: '' });

@@ -62,7 +62,19 @@ def test_the_runtime_assets_ship_with_the_package(name):
 def test_the_worker_and_page_agree_on_the_message_protocol():
     worker = tak.web.readAsset("console-worker.js")
     client = tak.web.readAsset("console.js")
-    for kind in ("status", "out", "err", "clear", "waiting", "files", "exit", "error"):
+    for kind in ("status", "out", "err", "clear", "waiting", "files", "nosave", "exit", "error"):
         assert "type: '%s'" % kind in worker, kind
         assert 'case "%s"' % kind in client, kind
     assert 'new Worker(config.workerUrl || "/tak/console-worker.js")' in client
+
+
+def test_a_failed_restore_never_syncs():
+    # The page replaces the whole store with each sync, so a sync after a
+    # failed read would erase the player's saves. The worker must only build
+    # its file sync when the restore succeeded, and must keep restored files
+    # whatever their timestamps say.
+    worker = tak.web.readAsset("console-worker.js")
+    assert "if (restore.ok) {" in worker
+    assert "syncFiles = makeFileSync(pyodide, pristine, restore.paths, log);" in worker
+    assert worker.count("makeFileSync(") == 2  # the definition and the one guarded call
+    assert "restored.has(path) ||" in worker
