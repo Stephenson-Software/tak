@@ -174,6 +174,7 @@ window.TakConsole = (function () {
         case "clear": screen.textContent = ""; break;
         case "waiting": setStatus(""); setWaiting(true); break;
         case "files": keepFiles(message.files); break;
+        case "nosave": write(message.msg + "\n", "tak-console-note"); break;
         case "exit":
           setWaiting(false);
           write("\n[The game has ended. Reload the page to play again.]\n", "tak-console-note");
