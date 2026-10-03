@@ -171,7 +171,7 @@ window.TakConsole = (function () {
     });
 
     // -- Kept files: IndexedDB is written here, never in the blocked Worker --
-    function keepFiles(files) {
+    function keepFiles(files, deleted) {
       if (savesFrozen) return;
       const request = indexedDB.open(idbName, IDB_VERSION);
       request.onupgradeneeded = (ev) => {
@@ -186,13 +186,11 @@ window.TakConsole = (function () {
         let tx;
         try { tx = db.transaction(IDB_STORE, "readwrite"); }
         catch (e) { console.warn(log, "could not keep files:", e); db.close(); return; }
-        const store = tx.objectStore(IDB_STORE);
-        // The map is every file the program has written, so replacing the
-        // store's contents is what makes a deleted save stay deleted.
-        store.clear();
-        for (const [path, content] of Object.entries(files)) store.put(content, path);
         tx.oncomplete = () => db.close();
         tx.onerror = () => { console.warn(log, "keeping files failed:", tx.error); db.close(); };
+        tx.onabort = () => { console.warn(log, "files not kept, stored files unchanged:", tx.error); db.close(); };
+        // Never cleared, all or nothing: see mirrorToStore.
+        mirrorToStore(tx.objectStore(IDB_STORE), files, deleted, log);
       };
       request.onerror = () => console.warn(log, "could not open file storage:", request.error);
     }
@@ -206,7 +204,7 @@ window.TakConsole = (function () {
         case "err": write(message.text, "tak-console-stderr"); break;
         case "clear": screen.textContent = ""; break;
         case "waiting": setStatus(""); setWaiting(true); break;
-        case "files": keepFiles(message.files); break;
+        case "files": keepFiles(message.files, message.deleted); break;
         case "nosave": write(message.msg + "\n", "tak-console-note"); break;
         case "exit":
           setWaiting(false);
@@ -241,6 +239,33 @@ window.TakConsole = (function () {
   // saves.js is shared with tak's own front-end (boot.js) and fetched on
   // demand, so a game's page does not have to list it. If it cannot be
   // loaded the game runs as before, without the Saves control.
+  // One sync, applied inside keepFiles' readwrite transaction. Every file
+  // sent is written; a stored file not sent is deleted only if `deleted`
+  // names it (console-worker.js names only files this session restored or
+  // kept and the program then removed). Everything else in the store is kept.
+  // Identical to boot.js's: the store used to be cleared on every sync, which
+  // erased any kept file missing from the Worker's copy.
+  function mirrorToStore(store, files, deleted, log) {
+    // All or nothing: the caller's one transaction either takes every write
+    // and delete or none. A put that throws aborts it here, and IndexedDB
+    // aborts it by itself if a request fails later (quota, say), so the store
+    // is never left with part of a sync - one file of a slot new and the next
+    // old, or a file skipped.
+    try {
+      for (const [path, content] of Object.entries(files)) store.put(content, path);
+      for (const path of Array.isArray(deleted) ? deleted : []) {
+        if (typeof path !== "string" || Object.prototype.hasOwnProperty.call(files, path)) continue;
+        store.delete(path);
+      }
+      return true;
+    } catch (e) {
+      console.warn(log, "nothing was saved this time (the stored saves are unchanged):", e);
+      try { store.transaction.abort(); } catch (abortError) { /* already over */ }
+      return false;
+    }
+  }
+
+
   function loadSaveTransfer(url, ready, log) {
     if (window.TakSaves) { ready(); return; }
     const script = document.createElement("script");

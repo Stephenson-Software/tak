@@ -6,7 +6,10 @@
 //   worker -> main:  { type: 'status', msg: string }
 //                    { type: 'ready' }
 //                    { type: 'error', msg: string }
-//                    { type: 'save', files: { path: content, ... } }
+//                    { type: 'save', files: { path: content, ... },
+//                      deleted: [path, ...] }  every file in the save
+//                             directory, and the files this session saw
+//                             there that the game has since removed
 //                    { type: 'nosave', msg: string }  saves could not be read,
 //                             so none will be written this session
 //                    { type: 'arcade', request: string }  a score or unlock
@@ -63,10 +66,10 @@ function idbOpen(name) {
 // -- Save restore: read IndexedDB into the save directory before Python starts -
 // Always resolves, never rejects: a browser that won't hand back stored data
 // should still start the game, not refuse to load it. But it reports whether
-// the read succeeded, because the main thread REPLACES the whole store with
-// each save (boot.js idbWrite clears it first): syncing after a failed read
-// would replace the player's saves with only this session's. Resolves to true
-// when every stored file was written back, false otherwise.
+// the read succeeded, because each sync writes this session's copy of every
+// save over the stored one: syncing after a failed read would put a fresh
+// run's slot 1 over the player's stored slot 1. Resolves to the Set of paths
+// written back when every stored file was, and to null otherwise.
 async function loadSavesFromIDB(pyodide, idbName, log) {
     try {
         const db = await Promise.race([
@@ -93,7 +96,7 @@ async function loadSavesFromIDB(pyodide, idbName, log) {
             tx.onabort        = () => reject(new Error('IndexedDB transaction aborted'));
         });
 
-        let restored = 0;
+        const restored = new Set();
         for (const { path, content } of entries) {
             // Save slots are directories (/saves/slot_1/save.json), so the
             // parents have to exist before the file can be written.
@@ -105,22 +108,22 @@ async function loadSavesFromIDB(pyodide, idbName, log) {
             }
             try {
                 pyodide.FS.writeFile(path, content, { encoding: 'utf8' });
-                restored++;
+                restored.add(path);
             } catch (e) {
                 // A file that cannot be written back would be dropped by the
                 // next sync, so this counts as a failed restore.
                 console.warn(log, 'could not restore save file', path, e);
                 try { db.close(); } catch {}
-                return false;
+                return null;
             }
         }
-        if (restored > 0) console.log(log, `${restored} save file(s) restored`);
+        if (restored.size > 0) console.log(log, `${restored.size} save file(s) restored`);
         try { db.close(); } catch {}
-        return true;
+        return restored;
 
     } catch (err) {
         console.warn(log, 'could not read saved games:', err);
-        return false;
+        return null;
     }
 }
 
@@ -129,34 +132,66 @@ async function loadSavesFromIDB(pyodide, idbName, log) {
 // write or delete. Walking pyodide.FS is pure JavaScript and needs no event
 // loop, and postMessage is synchronous from the Worker's side - so this works
 // even though Python is mid-call and the Worker is otherwise blocked.
+//
+// The main thread never clears the store: it writes the files sent and deletes
+// only the paths named in `deleted`. A path is named there only if THIS session
+// saw it in the save directory (restored it, or sent it in an earlier sync) and
+// the game has since removed it - a slot deleted in the menu, a file moved by a
+// migration. A stored save this session never saw (another tab's, or one that
+// did not make it into the directory for any reason) is never deleted by it.
+// A walk that hit any error sends nothing at all: a file that could not be
+// read is not a file that is gone, and a sync without it would be partial.
 
-function makeSyncSaves(pyodide, saveDirectory, log) {
+function makeSyncSaves(pyodide, saveDirectory, restoredPaths, log) {
+    const prefix = saveDirectory.replace(/\/+$/, '') + '/';
+    const seen = new Set();
+    for (const path of restoredPaths) if (path.startsWith(prefix)) seen.add(path);
     return () => {
         const files = {};
+        const present = new Set();
+        let complete = true;
         function walk(path) {
             let entries;
-            try { entries = pyodide.FS.readdir(path); } catch { return; }
+            try { entries = pyodide.FS.readdir(path); } catch { complete = false; return; }
             for (const name of entries) {
                 if (name === '.' || name === '..') continue;
                 const full = `${path}/${name}`;
                 let stat;
-                try { stat = pyodide.FS.stat(full); } catch { continue; }
+                try { stat = pyodide.FS.stat(full); } catch { complete = false; continue; }
                 const isDirectory = (stat.mode & 0o170000) === 0o040000;
                 if (isDirectory) {
                     walk(full);
                 } else {
+                    present.add(full);
                     // Saves are JSON, so UTF-8 is the whole story here.
                     try {
                         files[full] = pyodide.FS.readFile(full, { encoding: 'utf8' });
                     } catch (e) {
+                        complete = false;
                         console.warn(log, 'could not read save file', full, e);
                     }
                 }
             }
         }
         walk(saveDirectory);
-        self.postMessage({ type: 'save', files });
+        if (!complete) {
+            // All or nothing: a sync missing a file it should hold is not
+            // sent. The stored saves stay as they were; the next save retries.
+            console.warn(log, 'save directory not fully readable; nothing was saved this time');
+            return;
+        }
+        const deleted = removedSince(seen, present);
+        for (const path of deleted) seen.delete(path);
+        for (const path of present) seen.add(path);
+        self.postMessage({ type: 'save', files, deleted });
     };
+}
+
+// The paths in seen that are no longer present, sorted.
+function removedSince(seen, present) {
+    const gone = [];
+    for (const path of seen) if (!present.has(path)) gone.push(path);
+    return gone.sort();
 }
 
 // -- Worker entry point --------------------------------------------------------
@@ -206,7 +241,7 @@ self.onmessage = async (e) => {
         // Before Python: IDB callbacks still fire.
         const restored = await loadSavesFromIDB(pyodide, config.idbName || 'tak-saves', log);
         if (restored) {
-            globalThis.syncSaves = makeSyncSaves(pyodide, saveDirectory, log);
+            globalThis.syncSaves = makeSyncSaves(pyodide, saveDirectory, restored, log);
         } else {
             // Never sync after a failed read (see loadSavesFromIDB): with no
             // syncSaves, tak.saves.browser keeps this session's saves in the

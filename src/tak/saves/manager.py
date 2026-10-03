@@ -10,6 +10,35 @@ from tak.saves.browser import syncBrowserSaves
 MAX_SLOTS = 99
 
 
+def _slot_number(entry):
+    """N for a directory entry named slot_N with 1 <= N <= MAX_SLOTS, else None."""
+    if not entry.startswith("slot_"):
+        return None
+    _, _, suffix = entry.partition("_")
+    if not suffix.isdigit():
+        return None
+    slot_index = int(suffix)
+    if slot_index < 1 or slot_index > MAX_SLOTS:
+        return None
+    return slot_index
+
+
+def _holdsAnyFile(directory):
+    """True if directory has a file anywhere under it. A directory that cannot
+    be walked counts as holding one: unknown is never "empty"."""
+    try:
+        for _, _, files in os.walk(directory, onerror=_raise):
+            if files:
+                return True
+    except OSError:
+        return True
+    return False
+
+
+def _raise(error):
+    raise error
+
+
 # @author Daniel McCoy Stephenson
 class SaveFileManager:
     """Numbered save slots under one data directory.
@@ -38,34 +67,36 @@ class SaveFileManager:
 
         save_files = []
         try:
-            for entry in os.listdir(self.data_directory):
-                if not entry.startswith("slot_"):
-                    continue
-
-                _, _, suffix = entry.partition("_")
-                if not suffix.isdigit():
-                    continue
-
-                slot_index = int(suffix)
-                if slot_index < 1 or slot_index > MAX_SLOTS:
-                    continue
-
-                slot_path = os.path.join(self.data_directory, entry)
-                if not os.path.isdir(slot_path):
-                    continue
-
-                metadata = self._read_save_metadata(slot_path)
-                if metadata:
-                    save_files.append(
-                        {
-                            "slot": slot_index,
-                            "slot_name": entry,
-                            "path": slot_path,
-                            "metadata": metadata,
-                        }
-                    )
+            entries = os.listdir(self.data_directory)
         except OSError:
             return []
+        for entry in entries:
+            slot_index = _slot_number(entry)
+            if slot_index is None:
+                continue
+
+            slot_path = os.path.join(self.data_directory, entry)
+            if not os.path.isdir(slot_path):
+                continue
+
+            try:
+                metadata = self._read_save_metadata(slot_path)
+            except OSError as error:
+                # One slot that cannot be read must not hide the others: this
+                # used to end the whole scan and return an empty list, which
+                # also made get_next_available_slot offer slot 1 again.
+                metadata = self._unreadable_save_metadata(
+                    os.path.join(slot_path, self.primaryFile), error
+                )
+            if metadata:
+                save_files.append(
+                    {
+                        "slot": slot_index,
+                        "slot_name": entry,
+                        "path": slot_path,
+                        "metadata": metadata,
+                    }
+                )
 
         save_files.sort(key=lambda save: save["slot"])
         return save_files
@@ -131,16 +162,40 @@ class SaveFileManager:
         }
 
     def get_next_available_slot(self):
-        """Returns the next available save slot number, or None if all slots are full"""
-        save_files = self.list_save_files()
-        if not save_files:
-            return 1
+        """Returns the next free save slot number, or None if there is none.
 
-        existing_slots = sorted([save["slot"] for save in save_files])
+        "Free" is decided from the disk, not from the menu's list: a slot is
+        taken if its directory holds any file at all, whether or not
+        list_save_files() showed it. The list leaves out a slot with no primary
+        file (one whose other files survive), and any slot it could not read;
+        handing such a slot out as "Create New Save" would write the new run
+        over files that are still there. If the save directory exists but
+        cannot be read, no slot is offered: nothing can be known to be free."""
+        taken = set(save["slot"] for save in self.list_save_files())
+        if os.path.exists(self.data_directory):
+            try:
+                entries = os.listdir(self.data_directory)
+            except OSError:
+                return None
+            for entry in entries:
+                slot_index = _slot_number(entry)
+                if slot_index is None:
+                    continue
+                slot_path = os.path.join(self.data_directory, entry)
+                if not os.path.isdir(slot_path) or _holdsAnyFile(slot_path):
+                    taken.add(slot_index)
         for i in range(1, MAX_SLOTS + 1):
-            if i not in existing_slots:
+            if i not in taken:
                 return i
         return None
+
+    def slot_holds_files(self, slot_number):
+        """True if slot_N exists on disk with anything in it (or cannot be
+        read). The test "Create New Save" has to pass before a run is written."""
+        slot_path = os.path.join(self.data_directory, "slot_%d" % slot_number)
+        if not os.path.exists(slot_path):
+            return False
+        return not os.path.isdir(slot_path) or _holdsAnyFile(slot_path)
 
     def select_save_slot(self, slot_number):
         """Select a save slot to use"""

@@ -21,10 +21,11 @@
 // the same type, so a round trip is exact.
 //
 // -- Why nothing here can lose a save -----------------------------------------
-// Both runtimes REPLACE the whole store with every sync (boot.js idbWrite and
-// console.js keepFiles clear it, then write what the Worker has in memory).
-// A file written into the store behind a running game's back would therefore
-// be erased by that game's next save. So an import runs in this order:
+// Both runtimes write the Worker's in-memory copy of every save over the
+// stored one with every sync (boot.js idbWrite and console.js keepFiles; they
+// never clear the store, and delete only files the game itself removed). A
+// save imported behind a running game's back would therefore be overwritten
+// by that game's next save of the same slot. So an import runs in this order:
 //
 //   1. The file is read and validated in full, and the change it would make
 //      (added / replaced / kept) is computed and shown. Storage is not

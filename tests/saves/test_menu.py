@@ -125,3 +125,105 @@ def test_a_failed_delete_is_reported(tmp_path, monkeypatch):
     ui = ScriptedUI(["3", "1", "1", "4"])  # the slot is still there, so Quit is 4
     assert chooseSlot(ui, m, "Tidewater", describe) is None
     assert ui.dialogues == ["Failed to delete Slot 1."]
+
+
+# -- A new run is never written over files a slot already holds --------------
+# The browser runtime once showed an empty slot list while the slots were on
+# disk; "Create New Save (Slot 1)" would then have written over slot 1.
+# Whatever makes the list come up short, "free" is decided from the disk.
+
+import tak.saves.manager as managerModule  # noqa: E402
+
+
+def readAll(root):
+    found = {}
+    for directory, _, files in os.walk(root):
+        for name in files:
+            path = os.path.join(directory, name)
+            with open(path) as f:
+                found[os.path.relpath(path, root)] = f.read()
+    return found
+
+
+def test_a_slot_holding_only_other_files_is_not_handed_out(tmp_path):
+    root = str(tmp_path)
+    os.makedirs(os.path.join(root, "slot_1"))
+    with open(os.path.join(root, "slot_1", "stats.json"), "w") as f:
+        f.write('{"kept": true}')
+    m = manager(root)
+    assert m.list_save_files() == []  # no primary file: not a loadable save
+    assert m.get_next_available_slot() == 2
+    ui = ScriptedUI(["1"])
+    assert chooseSlot(ui, m, "T", describe) == ("new", 2)
+    assert ui.menus[0][1][0] == "Create New Save (Slot 2)"
+
+
+def test_an_empty_slot_directory_is_free(tmp_path):
+    root = str(tmp_path)
+    os.makedirs(os.path.join(root, "slot_1", "nested"))
+    assert manager(root).get_next_available_slot() == 1
+
+
+def test_one_unreadable_slot_does_not_hide_the_others(tmp_path):
+    root = str(tmp_path)
+    writeSlot(root, 1)
+    writeSlot(root, 2)
+
+    def readMetadata(path, data):
+        if path.endswith("slot_1"):
+            raise OSError("disk hiccup")
+        return {"loop": data["loop"]}
+
+    m = SaveFileManager(root, readMetadata=readMetadata)
+    saves = m.list_save_files()
+    assert [s["slot"] for s in saves] == [1, 2]
+    assert saves[0]["metadata"]["unreadable"] is True
+    assert m.get_next_available_slot() == 3
+
+
+def test_an_unreadable_save_directory_offers_no_new_slot(tmp_path, monkeypatch):
+    root = str(tmp_path)
+    writeSlot(root, 1)
+
+    def refuse(path):
+        raise OSError("cannot list")
+
+    monkeypatch.setattr(managerModule.os, "listdir", refuse)
+    m = manager(root)
+    assert m.list_save_files() == []
+    assert m.get_next_available_slot() is None
+
+
+def test_slots_hidden_from_the_list_are_still_taken(tmp_path, monkeypatch):
+    # The reported symptom: the list comes back empty although the slots are
+    # on disk. "Create New Save" must not point at slot 1.
+    root = str(tmp_path)
+    writeSlot(root, 1, '{"loop": 7}')
+    writeSlot(root, 2, '{"loop": 9}')
+    before = readAll(root)
+    m = manager(root)
+    monkeypatch.setattr(m, "list_save_files", lambda: [])
+    assert m.get_next_available_slot() == 3
+    ui = ScriptedUI(["1"])
+    assert chooseSlot(ui, m, "T", describe) == ("new", 3)
+    assert readAll(root) == before
+
+
+def test_choose_slot_refuses_a_new_run_in_an_occupied_slot(tmp_path):
+    root = str(tmp_path)
+    writeSlot(root, 1, '{"loop": 7}')
+    before = readAll(root)
+
+    class Stale(SaveFileManager):
+        def list_save_files(self):
+            return []
+
+        def get_next_available_slot(self):
+            return 1  # what an empty list used to produce
+
+    m = Stale(root, readMetadata=lambda p, d: {"loop": d["loop"]})
+    ui = ScriptedUI(["1", "2"])  # Create New Save (Slot 1), then Quit
+    assert chooseSlot(ui, m, "T", describe) is None
+    assert any("already holds files" in d for d in ui.dialogues)
+    assert m.selected_save_slot is None
+    assert readAll(root) == before

@@ -130,9 +130,9 @@ window.TakBoot = (function () {
       });
     }
 
-    // The file map is the whole save directory, so the store is cleared first
-    // - that is what makes deleting a save slot in-game actually stick.
-    function idbWrite(files) {
+    // Writes the files the Worker sent and deletes only the ones it names as
+    // deleted (see mirrorToStore). Never clears the store.
+    function idbWrite(files, deleted) {
       if (savesFrozen) return;
       idbOpen().then((db) => {
         // Checked again here, where the transaction is created: a save file
@@ -141,14 +141,10 @@ window.TakBoot = (function () {
         let tx;
         try { tx = db.transaction(IDB_STORE, "readwrite"); }
         catch (e) { console.warn(log, "could not save to IndexedDB:", e); db.close(); return; }
-        try { tx.objectStore(IDB_STORE).clear(); } catch {}
-        for (const [path, content] of Object.entries(files)) {
-          try { tx.objectStore(IDB_STORE).put(content, path); } catch (e) {
-            console.warn(log, "could not save", path, e);
-          }
-        }
         tx.oncomplete = () => db.close();
         tx.onerror    = () => { console.warn(log, "save failed:", tx.error); db.close(); };
+        tx.onabort    = () => { console.warn(log, "save not written, stored saves unchanged:", tx.error); db.close(); };
+        mirrorToStore(tx.objectStore(IDB_STORE), files, deleted, log);
       }).catch((err) => console.warn(log, "could not open save storage:", err));
     }
 
@@ -187,7 +183,7 @@ window.TakBoot = (function () {
       }
       if (message.type === "status") { setStatus(message.msg); return; }
       if (message.type === "ready")  { return; }
-      if (message.type === "save")   { idbWrite(message.files); return; }
+      if (message.type === "save")   { idbWrite(message.files, message.deleted); return; }
       if (message.type === "arcade") { arcade(message.request); return; }
       if (message.type === "nosave") {
         // A notice of its own, above the game: the status line is cleared as
@@ -227,6 +223,38 @@ window.TakBoot = (function () {
       },
     });
   }
+
+  // One sync, applied to the store inside the caller's readwrite transaction.
+  //
+  // Every file sent is written. A stored file NOT sent is deleted only if
+  // `deleted` names it - the Worker names only files this session saw and the
+  // game then removed (a slot deleted in the menu). Anything else in the store
+  // is kept: a save written by another tab, a file the Worker could not read,
+  // a path this session never restored. The store used to be cleared and
+  // rewritten from the Worker's copy on every sync, so a save missing from
+  // that copy for any reason was erased by the next save; it no longer can
+  // be. A Worker that sends no `deleted` (one from an older tak) deletes
+  // nothing. The console runtime (console.js) applies its syncs the same way.
+  function mirrorToStore(store, files, deleted, log) {
+    // All or nothing: the caller's one transaction either takes every write
+    // and delete or none. A put that throws aborts it here, and IndexedDB
+    // aborts it by itself if a request fails later (quota, say), so the store
+    // is never left with part of a sync - one file of a slot new and the next
+    // old, or a file skipped.
+    try {
+      for (const [path, content] of Object.entries(files)) store.put(content, path);
+      for (const path of Array.isArray(deleted) ? deleted : []) {
+        if (typeof path !== "string" || Object.prototype.hasOwnProperty.call(files, path)) continue;
+        store.delete(path);
+      }
+      return true;
+    } catch (e) {
+      console.warn(log, "nothing was saved this time (the stored saves are unchanged):", e);
+      try { store.transaction.abort(); } catch (abortError) { /* already over */ }
+      return false;
+    }
+  }
+
 
   // saves.js is shared with the console runtime and fetched on demand, so a
   // game's index.html does not have to list it. If it cannot be loaded the
