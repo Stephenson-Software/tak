@@ -137,6 +137,51 @@ unique per game and must never change once players have saves under it. The page
 [arcade](https://github.com/Stephenson-Software/arcade) both serve. Like every tak browser build,
 it must be served cross-origin isolated.
 
+## Saves: download and load
+
+Both browser runtimes put a small **Saves** button under the game. It opens a panel with
+**Download my saves** and **Load saves from a file**. A browser's saves live only in that
+browser, so this is how a player keeps a copy, moves to another device or browser, or follows a
+game to a new address. Neither page has to change: `boot.js` and `console.js` load
+`/tak/saves.js` themselves. Set `savesUrl` in the start config if it is served somewhere else.
+
+**The file** is one JSON document named `<game>-saves-YYYY-MM-DD.json`:
+
+```json
+{"format": "tak-saves", "version": 1, "game": "tidewater-saves",
+ "exported": "2026-10-03T12:00:00.000Z",
+ "files": {"/saves/slot_1/save.json": "{...}", "/game/src/saves/a.bin": {"base64": "AP8K"}}}
+```
+
+`game` is the page's `idbName`. Each file is stored as it was kept: text stays a string (tak's own
+front-end), and bytes become `{"base64": …}` (the console runtime). Download only reads the
+browser's storage, so the game keeps running.
+
+**Loading a file** never loses a save:
+
+1. **Validation before anything is written.** The whole file is checked before storage is touched.
+   A file is refused, with nothing changed, if it is not a tak saves file, if its version is newer,
+   or if it is another game's file ("This file holds saves for another game (overwinter), not this
+   one (tidewater)"). It is also refused if it holds a path outside the runtime's save root
+   (`/saves/` for tak's front-end, `/game/` for the console runtime), a `..` or empty path part,
+   or damaged content, or if it is over 20 MB.
+2. **Confirmation.** The panel lists the files that will be **added**, **replaced** by the copy
+   in the file, and **kept** as they are. Nothing is written until the player confirms.
+3. **Stop, then write.** On confirm, the game is stopped first. The runtime terminates its
+   Worker, and from then on it ignores any save write of its own. Each runtime clears and
+   rewrites its whole store on every sync, so a running game would otherwise erase the import on
+   its next save. Other open tabs of the same game are told to stop too.
+4. **Backup first.** The saves as they are at that moment are copied to a second IndexedDB
+   database, `<idbName>.tak-backups`, and read back. The last five are kept, and the panel
+   offers each one as a download. If the backup fails, nothing else happens. Loading a backup
+   file puts back every save the import replaced.
+5. **Merge, never delete.** Each imported file replaces the file at the same path. Every other
+   save is kept. The result is read back and checked, then the page reloads and the game
+   restores from storage as on any visit.
+
+A tab still running a tak release from before this feature cannot be told to stop, so close
+other tabs of the game before loading saves.
+
 ## Development
 
 ```bash
