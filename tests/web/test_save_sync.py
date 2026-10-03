@@ -134,8 +134,10 @@ console.log(JSON.stringify(results));
     }
 
 
-@pytest.mark.parametrize("asset,writer", [("boot.js", "function idbWrite("),
-                                          ("console.js", "function keepFiles(")])
+@pytest.mark.parametrize(
+    "asset,writer",
+    [("boot.js", "function idbWrite("), ("console.js", "function keepFiles(")],
+)
 def test_no_sync_clears_the_store(asset, writer):
     page = readAsset(asset)
     body = page.split(writer, 1)[1]
