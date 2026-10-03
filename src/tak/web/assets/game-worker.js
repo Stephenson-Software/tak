@@ -233,8 +233,32 @@ self.onmessage = async (e) => {
         // under src/, so one sys.path entry covers both.
         const entry      = config.entry || 'web/pyodide_main.py';
         const saveDirEnv = config.saveDirEnv || 'TAK_SAVE_DIR';
+        // time.sleep() of our own. tak.ui.pyodide polls for the player's
+        // input with time.sleep, and Pyodide picks its sleep strategy from the
+        // browser it thinks it is in: with a Safari user agent that path tries
+        // to suspend the WebAssembly stack and the game dies with "SuspendError:
+        // trying to suspend JS frames" at the first wait for input (reproduced
+        // with Tidewater, Overwinter and FishE under the iPhone 13 profile).
+        // This runtime already requires SharedArrayBuffer, so Atomics.wait on
+        // a private cell is a real, blocking sleep in every browser it supports.
+        // The console runtime does the same (console-worker.js).
+        const sleepCell = new Int32Array(new SharedArrayBuffer(4));
+        globalThis.takSleep = (seconds) => {
+            const ms = Number(seconds) * 1000;
+            if (ms > 0) Atomics.wait(sleepCell, 0, 0, ms);
+        };
         await pyodide.runPythonAsync(`
 import os, sys
+import time as _time
+from js import takSleep as _takSleep
+
+def _sleep(seconds):
+    seconds = float(seconds)
+    if seconds < 0:
+        raise ValueError("sleep length must be non-negative")
+    _takSleep(seconds)
+
+_time.sleep = _sleep
 sys.path.insert(0, '/game/src')
 os.chdir('/game')
 os.environ[${JSON.stringify(saveDirEnv)}] = ${JSON.stringify(saveDirectory)}
