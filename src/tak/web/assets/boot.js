@@ -134,6 +134,18 @@ window.TakBoot = (function () {
       if (message.type === "status") { setStatus(message.msg); return; }
       if (message.type === "ready")  { return; }
       if (message.type === "save")   { idbWrite(message.files); return; }
+      if (message.type === "nosave") {
+        // A notice of its own, above the game: the status line is cleared as
+        // soon as the first screen renders, and this must stay visible.
+        const notice = document.createElement("div");
+        notice.className = "status error tak-nosave";
+        notice.setAttribute("role", "alert");
+        notice.textContent = message.msg;
+        const app = document.getElementById("app");
+        if (app && app.parentNode) app.parentNode.insertBefore(notice, app);
+        else document.body.insertBefore(notice, document.body.firstChild);
+        return;
+      }
       if (message.type === "error")  {
         setStatus("The game stopped: " + message.msg + " — reload the page to start again. " +
                   "Your saved games are stored in this browser and are not affected.", true);

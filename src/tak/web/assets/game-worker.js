@@ -7,6 +7,8 @@
 //                    { type: 'ready' }
 //                    { type: 'error', msg: string }
 //                    { type: 'save', files: { path: content, ... } }
+//                    { type: 'nosave', msg: string }  saves could not be read,
+//                             so none will be written this session
 //                    string - a JSON {"type":"screen","screen":{...}} frame
 //                             posted by PyodideUserInterface
 //
@@ -58,7 +60,11 @@ function idbOpen(name) {
 
 // -- Save restore: read IndexedDB into the save directory before Python starts -
 // Always resolves, never rejects: a browser that won't hand back stored data
-// should start the player on a fresh save file, not refuse to load the game.
+// should still start the game, not refuse to load it. But it reports whether
+// the read succeeded, because the main thread REPLACES the whole store with
+// each save (boot.js idbWrite clears it first): syncing after a failed read
+// would replace the player's saves with only this session's. Resolves to true
+// when every stored file was written back, false otherwise.
 async function loadSavesFromIDB(pyodide, idbName, log) {
     try {
         const db = await Promise.race([
@@ -99,14 +105,20 @@ async function loadSavesFromIDB(pyodide, idbName, log) {
                 pyodide.FS.writeFile(path, content, { encoding: 'utf8' });
                 restored++;
             } catch (e) {
+                // A file that cannot be written back would be dropped by the
+                // next sync, so this counts as a failed restore.
                 console.warn(log, 'could not restore save file', path, e);
+                try { db.close(); } catch {}
+                return false;
             }
         }
         if (restored > 0) console.log(log, `${restored} save file(s) restored`);
         try { db.close(); } catch {}
+        return true;
 
     } catch (err) {
-        console.warn(log, 'save restore skipped (starting fresh):', err);
+        console.warn(log, 'could not read saved games:', err);
+        return false;
     }
 }
 
@@ -182,8 +194,19 @@ self.onmessage = async (e) => {
         self.postMessage({ type: 'status', msg: messages.restore });
 
         pyodide.FS.mkdir(saveDirectory);
-        await loadSavesFromIDB(pyodide, config.idbName || 'tak-saves', log);  // before Python: IDB callbacks still fire
-        globalThis.syncSaves = makeSyncSaves(pyodide, saveDirectory, log);
+        // Before Python: IDB callbacks still fire.
+        const restored = await loadSavesFromIDB(pyodide, config.idbName || 'tak-saves', log);
+        if (restored) {
+            globalThis.syncSaves = makeSyncSaves(pyodide, saveDirectory, log);
+        } else {
+            // Never sync after a failed read (see loadSavesFromIDB): with no
+            // syncSaves, tak.saves.browser keeps this session's saves in the
+            // tab only, and the stored ones are left exactly as they were.
+            self.postMessage({ type: 'nosave', msg:
+                "Your saved games couldn't be read in this browser just now, so nothing you " +
+                "save in this session will be kept. Your earlier saves are untouched; reloading " +
+                'the page usually fixes this.' });
+        }
 
         self.postMessage({ type: 'status', msg: messages.packages });
 
