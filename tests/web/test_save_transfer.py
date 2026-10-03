@@ -20,8 +20,8 @@ from tak.web import readAsset
 
 RUNTIMES = (
     # page script, its IndexedDB write function, the save root it passes
-    ("boot.js", "function idbWrite(files)", "root: saveDir"),
-    ("console.js", "function keepFiles(files)", 'root: "/game"'),
+    ("boot.js", "function idbWrite(files, deleted)", "root: saveDir"),
+    ("console.js", "function keepFiles(files, deleted)", 'root: "/game"'),
 )
 
 
@@ -58,8 +58,8 @@ def test_each_runtime_loads_the_control(asset, writer, rootOption):
 
 @pytest.mark.parametrize("asset,writer,rootOption", RUNTIMES)
 def test_an_import_stops_every_write_of_the_runtimes_own(asset, writer, rootOption):
-    # The runtimes CLEAR the store on every sync, so once an import starts
-    # nothing of theirs may write again until the page reloads: the flag is
+    # The runtimes write their copy of every save on every sync, so once an
+    # import starts nothing of theirs may write again until the page reloads: the flag is
     # checked on entry and again where the transaction is created, and the
     # Worker is terminated so it cannot post another sync.
     page = readAsset(asset)

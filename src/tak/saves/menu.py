@@ -52,6 +52,15 @@ def chooseSlot(userInterface, saveFileManager, title, describe):
         choice = int(userInterface.showOptions(title, options, unavailable))
         kind, arg = actions[choice - 1]
 
+        if kind == "new" and _slotHoldsFiles(saveFileManager, arg):
+            # get_next_available_slot already skips such a slot; this is the
+            # last check before a new run is written into it, for a manager
+            # that computes "next" some other way.
+            userInterface.showDialogue(
+                "Slot %d already holds files, so a new save was not started "
+                "there - nothing in it was changed." % arg
+            )
+            continue
         if kind in ("load", "new"):
             saveFileManager.select_save_slot(arg)
             return kind, arg
@@ -104,3 +113,10 @@ def deleteSlot(userInterface, saveFileManager, title, save_files):
         return True
     userInterface.showDialogue("Failed to delete Slot %d." % slot)
     return False
+
+
+def _slotHoldsFiles(saveFileManager, slot):
+    """True if a new run must not be started in slot. A manager without
+    slot_holds_files (one not built on SaveFileManager) is not checked."""
+    check = getattr(saveFileManager, "slot_holds_files", None)
+    return bool(check(slot)) if callable(check) else False

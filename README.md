@@ -65,7 +65,9 @@ with open(saves.get_save_path("save.json"), "w") as f: json.dump(state, f)
 syncBrowserSaves()   # no-op outside the browser; required after every write under Pyodide
 ```
 
-`chooseSlot(ui, saves, "Tidewater", describe)` runs the opening menu — load, new, delete, quit — and returns `("load", n)`, `("new", n)` or `None`. A slot whose primary file will not parse stays listed as damaged and stays claimed, so a new game is never pointed at an occupied directory.
+`chooseSlot(ui, saves, "Tidewater", describe)` runs the opening menu — load, new, delete, quit — and returns `("load", n)`, `("new", n)` or `None`. A slot whose primary file will not parse stays listed as damaged and stays claimed, so a new game is never pointed at an occupied directory. `get_next_available_slot()` decides "free" from the disk, not from the list: any `slot_N` directory holding a file is taken even if the menu could not show it, and `chooseSlot` refuses to start a new run in a slot that holds files.
+
+In the browser, each sync writes the save directory's files to IndexedDB in one all-or-nothing transaction and never clears the store. A stored file is deleted only when this tab restored or saved it and the game then removed it (deleting a slot, a migration moving a file); a stored save the tab never had, such as one written by another tab, is left alone.
 
 ### Unlocks and NPCs
 
@@ -168,9 +170,9 @@ browser's storage, so the game keeps running.
 2. **Confirmation.** The panel lists the files that will be **added**, **replaced** by the copy
    in the file, and **kept** as they are. Nothing is written until the player confirms.
 3. **Stop, then write.** On confirm, the game is stopped first. The runtime terminates its
-   Worker, and from then on it ignores any save write of its own. Each runtime clears and
-   rewrites its whole store on every sync, so a running game would otherwise erase the import on
-   its next save. Other open tabs of the same game are told to stop too.
+   Worker, and from then on it ignores any save write of its own. Each runtime writes its own
+   copy of every save on every sync, so a running game would otherwise overwrite an imported
+   slot on its next save. Other open tabs of the same game are told to stop too.
 4. **Backup first.** The saves as they are at that moment are copied to a second IndexedDB
    database, `<idbName>.tak-backups`, and read back. The last five are kept, and the panel
    offers each one as a download. If the backup fails, nothing else happens. Loading a backup

@@ -8,7 +8,8 @@
 //                    { type: 'err', text }         stderr (tracebacks)
 //                    { type: 'clear' }             the program cleared the screen
 //                    { type: 'waiting' }           the program is reading a line
-//                    { type: 'files', files }      every file to persist (see below)
+//                    { type: 'files', files, deleted }  every file to persist,
+//                                  and the kept files the program removed (see below)
 //                    { type: 'nosave', msg }       kept files could not be read, so
 //                                                  nothing will be written this session
 //                    { type: 'exit', code }        the program finished
@@ -59,8 +60,9 @@ function idbOpen(name) {
 // file back over the unpacked bundle. Never rejects - a browser that will not
 // hand stored data back starts the player fresh rather than not at all - but
 // it reports whether the read succeeded, because what happens next depends on
-// it: the page REPLACES the stored files with each sync, so syncing after a
-// failed read would replace the player's saves with nothing.
+// it: each sync writes this session's copy of every file it keeps over the
+// stored one, so syncing after a failed read would put a fresh run's save
+// over the player's.
 //
 // Resolves to { ok, paths }: ok is false if the store could not be read, and
 // paths is every file that was written back.
@@ -109,44 +111,77 @@ async function restoreFiles(pyodide, idbName, log) {
     }
 }
 
+// visit(path, stat) for every file under root. Returns false if any part of
+// the tree could not be read, so the caller knows the walk is not the whole
+// truth.
 function walkFiles(pyodide, root, visit) {
     let names;
-    try { names = pyodide.FS.readdir(root); } catch { return; }
+    try { names = pyodide.FS.readdir(root); } catch { return false; }
+    let complete = true;
     for (const name of names) {
         if (name === '.' || name === '..' || name === '__pycache__') continue;
         const path = `${root}/${name}`;
         let stat;
-        try { stat = pyodide.FS.stat(path); } catch { continue; }
-        if ((stat.mode & 0o170000) === 0o040000) walkFiles(pyodide, path, visit);
-        else visit(path, stat);
+        try { stat = pyodide.FS.stat(path); } catch { complete = false; continue; }
+        if ((stat.mode & 0o170000) === 0o040000) {
+            if (!walkFiles(pyodide, path, visit)) complete = false;
+        } else {
+            visit(path, stat);
+        }
     }
+    return complete;
 }
 
 // A file is kept if it was restored from storage (it is the player's, whatever
 // its timestamp says - a restore can land in the same millisecond as the
 // unpack), if it was not in the bundle as unpacked, or if it has been written
 // since (its mtime moved). Bundle files the program never touched are not
-// kept: a new deploy of the game must win over a stale copy. A kept file the
-// program deletes is gone from the walk, so the deletion sticks.
+// kept: a new deploy of the game must win over a stale copy.
+//
+// The page never clears the store (console.js mirrorToStore): it writes the
+// files sent and deletes only those named in `deleted`. A file is named there
+// only if this session restored it or kept it in an earlier sync and it is now
+// gone from the tree - the program deleted it, so the deletion sticks. A
+// stored file this session never had is never deleted by it, and a walk that
+// hit an error sends nothing at all (a partial sync is never written).
 function makeFileSync(pyodide, pristine, restored, log) {
     let lastSignature = null;
+    const seen = new Set(restored);
     return () => {
         const changed = [];
-        walkFiles(pyodide, GAME_DIRECTORY, (path, stat) => {
+        const present = new Set();
+        let complete = walkFiles(pyodide, GAME_DIRECTORY, (path, stat) => {
+            present.add(path);
             const mtime = stat.mtime instanceof Date ? stat.mtime.getTime() : Number(stat.mtime);
             const original = pristine.get(path);
             if (restored.has(path) || original === undefined || original !== mtime) {
                 changed.push([path, mtime, stat.size]);
             }
         });
-        const signature = JSON.stringify(changed);
-        if (signature === lastSignature) return;  // nothing new since the last prompt
-        lastSignature = signature;
         const files = {};
         for (const [path] of changed) {
-            try { files[path] = pyodide.FS.readFile(path); } catch (e) { console.warn(log, 'could not read', path, e); }
+            try { files[path] = pyodide.FS.readFile(path); } catch (e) {
+                complete = false;
+                console.warn(log, 'could not read', path, e);
+            }
         }
-        self.postMessage({ type: 'files', files });
+        if (!complete) {
+            // All or nothing: a sync missing a file it should hold is not
+            // sent; the stored files stay as they were and the next prompt
+            // retries.
+            console.warn(log, 'files not fully readable; nothing was kept this time');
+            lastSignature = null;
+            return;
+        }
+        const deleted = [];
+        for (const path of seen) if (!present.has(path)) deleted.push(path);
+        deleted.sort();
+        const signature = JSON.stringify([changed, deleted]);
+        if (signature === lastSignature) return;  // nothing new since the last prompt
+        lastSignature = signature;
+        for (const path of deleted) seen.delete(path);
+        for (const path of Object.keys(files)) seen.add(path);
+        self.postMessage({ type: 'files', files, deleted });
     };
 }
 
@@ -223,9 +258,10 @@ self.onmessage = async (event) => {
         if (restore.ok) {
             syncFiles = makeFileSync(pyodide, pristine, restore.paths, log);
         } else {
-            // Never sync after a failed read: the page replaces the store with
-            // each sync, which would erase saves this session never saw. The
-            // game still runs; this session's progress just is not kept.
+            // Never sync after a failed read: each sync writes this session's
+            // files over the stored ones, which would put a fresh run's save
+            // over one this session never saw. The game still runs; this
+            // session's progress just is not kept.
             self.postMessage({ type: 'nosave', msg:
                 "Your saved files could not be read, so this session's progress won't be saved " +
                 '(your earlier saves are untouched). Reloading the page usually fixes this.' });
