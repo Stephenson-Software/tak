@@ -12,7 +12,9 @@
 //
 // It also puts a "Saves" control under the game (saves.js, loaded from
 // config.savesUrl, default /tak/saves.js): download the saves as a file, and
-// load them from one.
+// load them from one. A game's tak.arcade scores and unlocks are sent on by
+// arcade.js (config.arcadeUrl, default /tak/arcade.js), loaded only when the
+// game first reports one.
 //
 // Everything below is game-agnostic: the SharedArrayBuffer ring the player's
 // input travels over, the IndexedDB mirror of the save directory, and the
@@ -150,6 +152,25 @@ window.TakBoot = (function () {
       }).catch((err) => console.warn(log, "could not open save storage:", err));
     }
 
+    // -- Scores and achievements (arcade.js) -----------------------------------
+    // Fire-and-forget: loaded on the game's first report, and if it cannot be
+    // loaded the reports are dropped and the game never notices.
+    let arcadeQueue = [];
+    function arcade(request) {
+      if (arcadeQueue === null) {
+        if (window.TakArcade) window.TakArcade.handle(request);
+        return;
+      }
+      if (arcadeQueue.length < 50) arcadeQueue.push(request);
+      if (arcadeQueue.length > 1) return;
+      loadScript(config.arcadeUrl || "/tak/arcade.js", function () {
+        const queued = arcadeQueue || [];
+        arcadeQueue = null;
+        if (!window.TakArcade) return;
+        queued.forEach(function (queuedRequest) { window.TakArcade.handle(queuedRequest); });
+      }, log);
+    }
+
     // -- Worker ----------------------------------------------------------------
     worker = new Worker(config.workerUrl || "/tak/game-worker.js");
     worker.onmessage = (e) => {
@@ -167,6 +188,7 @@ window.TakBoot = (function () {
       if (message.type === "status") { setStatus(message.msg); return; }
       if (message.type === "ready")  { return; }
       if (message.type === "save")   { idbWrite(message.files); return; }
+      if (message.type === "arcade") { arcade(message.request); return; }
       if (message.type === "nosave") {
         // A notice of its own, above the game: the status line is cleared as
         // soon as the first screen renders, and this must stay visible.
@@ -217,6 +239,17 @@ window.TakBoot = (function () {
       if (window.TakSaves) ready();
     };
     script.onerror = () => console.warn(log, "the Saves control could not be loaded from", url);
+    document.head.appendChild(script);
+  }
+
+  // arcade.js likewise: ready() runs once it has loaded or failed to (the
+  // queue is then flushed or dropped).
+  function loadScript(url, ready, log) {
+    if (window.TakArcade) { ready(); return; }
+    const script = document.createElement("script");
+    script.src = url;
+    script.onload = ready;
+    script.onerror = () => { console.warn(log, "scores could not be loaded from", url); ready(); };
     document.head.appendChild(script);
   }
 

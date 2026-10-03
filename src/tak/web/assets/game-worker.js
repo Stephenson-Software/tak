@@ -9,6 +9,8 @@
 //                    { type: 'save', files: { path: content, ... } }
 //                    { type: 'nosave', msg: string }  saves could not be read,
 //                             so none will be written this session
+//                    { type: 'arcade', request: string }  a score or unlock
+//                             from tak.arcade (JSON), sent on by arcade.js
 //                    string - a JSON {"type":"screen","screen":{...}} frame
 //                             posted by PyodideUserInterface
 //
@@ -180,6 +182,13 @@ self.onmessage = async (e) => {
     globalThis.sabData     = new Uint8Array(sab, 8, ringSize);
     globalThis.sabRingSize = ringSize;
     globalThis.sendToMain  = (data) => self.postMessage(data);
+    // tak.arcade's scores and unlocks (RFC 0014). Posted to the page, which
+    // makes the request from the main thread with the player's cookie: this
+    // Worker is blocked by Python whenever the game runs, so it could never
+    // see a fetch through. postMessage is synchronous from this side.
+    globalThis.takArcade   = (request) => {
+        if (typeof request === 'string') self.postMessage({ type: 'arcade', request });
+    };
 
     try {
         importScripts(config.pyodideUrl || DEFAULT_PYODIDE_URL);

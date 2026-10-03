@@ -182,6 +182,42 @@ browser's storage, so the game keeps running.
 A tab still running a tak release from before this feature cannot be told to stop, so close
 other tabs of the game before loading saves.
 
+## Scores and achievements on arcade
+
+`tak.arcade` reports a player's scores and achievement unlocks to
+[arcade-social](https://github.com/Stephenson-Software/arcade-social) (`https://api.play.danielstephenson.dev`),
+which shows them as leaderboards and "N% of players" on the game's page at
+[danielstephenson.dev/play](https://danielstephenson.dev/play) (Stephenson-Software RFC 0014):
+
+```python
+from tak import arcade
+
+arcade.submitScore("most-money", 12450)            # returns None; never raises
+arcade.submitScore("fastest-crossing", 41.7, run="seed-12")   # run: optional tag, 1-64 of A-Za-z0-9._:-
+arcade.unlock("first-catch")                       # idempotent; never raises
+```
+
+- **Declare first.** Boards and achievements are declared in the gateway's `config/play/boards.yaml`
+  (ids `^[a-z][a-z0-9-]{1,30}$`, never renamed once used; each board has `min`/`max`). The service
+  refuses anything undeclared or out of bounds.
+- **Call unconditionally.** Outside the browser (console, the HTTP front-end, tests) both calls do
+  nothing. In the browser the Worker posts each report to the page (`{type: "arcade"}`), and
+  `boot.js` loads `/tak/arcade.js` on the first one, which sends it from the main thread with the
+  player's sign-in cookie. Nothing is ever waited for and nothing is thrown into the game.
+- **Silently dropped** when the page is not `https://<slug>.play.danielstephenson.dev` (an alias such
+  as `fishe.danielstephenson.dev`, `localhost`, a desktop build), when the player is not signed in
+  (checked once a minute at `/v1/session`; a score earned signed out is never uploaded later), when
+  the service refuses it (undeclared, out of bounds, no display name yet, `maxPerHour`), or after one
+  retry 30 s later when the service is down or unreachable. Malformed calls (a bad id, a non-finite
+  value) are ignored.
+- **Send every score.** The client does not know the player's stored best, so it does not filter;
+  the service keeps each player's best per board.
+- **Scores are forgeable.** They come from the player's browser, and every leaderboard is labelled
+  "not verified". Do not attach anything of value to them.
+- The console runtime (unmodified console programs) has no `takArcade` bridge, so the calls are
+  no-ops there. Set `arcadeUrl` in `TakBoot.start` if `arcade.js` is served somewhere other than
+  `/tak/arcade.js`.
+
 ## Development
 
 ```bash
