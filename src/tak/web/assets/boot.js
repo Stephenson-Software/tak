@@ -10,6 +10,10 @@
 //     statusElementId: 'status',    // optional; where boot progress is shown
 //   });
 //
+// It also puts a "Saves" control under the game (saves.js, loaded from
+// config.savesUrl, default /tak/saves.js): download the saves as a file, and
+// load them from one.
+//
 // Everything below is game-agnostic: the SharedArrayBuffer ring the player's
 // input travels over, the IndexedDB mirror of the save directory, and the
 // Worker that runs Python. See game-worker.js for the other half.
@@ -30,6 +34,33 @@ window.TakBoot = (function () {
       statusEl.style.display = msg ? "" : "none";
       statusEl.classList.toggle("error", !!isError);
     }
+
+    const idbName = config.idbName || "tak-saves";
+    const saveDir = config.saveDir || "/saves";
+
+    // -- Save export / import (saves.js) ---------------------------------------
+    // Set once a save file is being loaded: from then on this page writes
+    // nothing to IndexedDB of its own accord (idbWrite checks it when its
+    // transaction is created) and the Worker is gone, so no sync can erase
+    // what the import writes before the page reloads. See saves.js.
+    let savesFrozen = false;
+    let worker = null;
+    function stopForSaveTransfer() {
+      savesFrozen = true;
+      if (worker) worker.terminate();
+      setStatus("The game was stopped to load your saves.", false);
+    }
+    // Added before anything that can refuse to start the game, so that saves
+    // stored earlier can still be downloaded from a browser that cannot run it.
+    loadSaveTransfer(config.savesUrl || "/tak/saves.js", function () {
+      window.TakSaves.attach({
+        idbName: idbName,
+        root: saveDir,
+        after: document.getElementById("app") || statusEl,
+        stop: stopForSaveTransfer,
+        log: log,
+      });
+    }, log);
 
     // -- Input transport: SharedArrayBuffer ring buffer ----------------------
     //
@@ -83,8 +114,6 @@ window.TakBoot = (function () {
     // The Worker is blocked by Python whenever the game runs, so it can't
     // drive IDB callbacks; it posts the save files over and this event loop
     // stores them. See the comment at the top of game-worker.js.
-    const idbName = config.idbName || "tak-saves";
-
     function idbOpen() {
       return new Promise((resolve, reject) => {
         const req = indexedDB.open(idbName, IDB_VERSION);
@@ -102,7 +131,11 @@ window.TakBoot = (function () {
     // The file map is the whole save directory, so the store is cleared first
     // - that is what makes deleting a save slot in-game actually stick.
     function idbWrite(files) {
+      if (savesFrozen) return;
       idbOpen().then((db) => {
+        // Checked again here, where the transaction is created: a save file
+        // may have started loading while the database was opening.
+        if (savesFrozen) { db.close(); return; }
         let tx;
         try { tx = db.transaction(IDB_STORE, "readwrite"); }
         catch (e) { console.warn(log, "could not save to IndexedDB:", e); db.close(); return; }
@@ -118,7 +151,7 @@ window.TakBoot = (function () {
     }
 
     // -- Worker ----------------------------------------------------------------
-    const worker = new Worker(config.workerUrl || "/tak/game-worker.js");
+    worker = new Worker(config.workerUrl || "/tak/game-worker.js");
     worker.onmessage = (e) => {
       const message = e.data;
       if (typeof message === "string") {
@@ -161,7 +194,7 @@ window.TakBoot = (function () {
       ringSize: RING_SIZE,
       config: {
         idbName: idbName,
-        saveDir: config.saveDir || "/saves",
+        saveDir: saveDir,
         saveDirEnv: config.saveDirEnv || "TAK_SAVE_DIR",
         bundleUrl: config.bundleUrl || "/web/game.zip",
         entry: config.entry || "web/pyodide_main.py",
@@ -171,6 +204,20 @@ window.TakBoot = (function () {
         logPrefix: log,
       },
     });
+  }
+
+  // saves.js is shared with the console runtime and fetched on demand, so a
+  // game's index.html does not have to list it. If it cannot be loaded the
+  // game runs exactly as before, just without the Saves control.
+  function loadSaveTransfer(url, ready, log) {
+    if (window.TakSaves) { ready(); return; }
+    const script = document.createElement("script");
+    script.src = url;
+    script.onload = () => {
+      if (window.TakSaves) ready();
+    };
+    script.onerror = () => console.warn(log, "the Saves control could not be loaded from", url);
+    document.head.appendChild(script);
   }
 
   return { start: start };

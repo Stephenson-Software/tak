@@ -10,6 +10,10 @@
 //     elementId: 'console',           // optional; the element to draw into
 //   });
 //
+// Under the terminal goes a "Saves" control (saves.js, loaded from
+// config.savesUrl, default /tak/saves.js): download the kept files as one
+// save file, and load them from one.
+//
 // The terminal is a scrolling output pane and one real text field. A real
 // <input> (rather than key events on a canvas) is what makes a phone's
 // on-screen keyboard open, autocorrect stay out of the way, and paste work.
@@ -99,6 +103,32 @@ window.TakConsole = (function () {
       }
     }
 
+    // -- Save export / import (saves.js) -------------------------------------
+    // Once a save file is being loaded, this page keeps no files of its own
+    // accord (keepFiles checks the flag when its transaction is created) and
+    // the Worker is terminated, so nothing can erase what the import writes
+    // before the page reloads. See saves.js for the whole ordering.
+    const idbName = config.idbName || "tak-console-files";
+    let savesFrozen = false;
+    let worker = null;
+    function stopForSaveTransfer() {
+      savesFrozen = true;
+      if (worker) worker.terminate();
+      setWaiting(false);
+      setStatus("The game was stopped to load your saves.", false);
+    }
+    // Before anything that can refuse to start, so files kept earlier can
+    // still be downloaded from a browser that cannot run the game.
+    loadSaveTransfer(config.savesUrl || "/tak/saves.js", function () {
+      window.TakSaves.attach({
+        idbName: idbName,
+        root: "/game",
+        after: root,
+        stop: stopForSaveTransfer,
+        log: log,
+      });
+    }, log);
+
     if (typeof SharedArrayBuffer === "undefined") {
       setStatus(
         "This browser can't run the game here: SharedArrayBuffer is unavailable, which " +
@@ -141,8 +171,8 @@ window.TakConsole = (function () {
     });
 
     // -- Kept files: IndexedDB is written here, never in the blocked Worker --
-    const idbName = config.idbName || "tak-console-files";
     function keepFiles(files) {
+      if (savesFrozen) return;
       const request = indexedDB.open(idbName, IDB_VERSION);
       request.onupgradeneeded = (ev) => {
         const db = ev.target.result;
@@ -150,6 +180,9 @@ window.TakConsole = (function () {
       };
       request.onsuccess = (ev) => {
         const db = ev.target.result;
+        // Checked again where the transaction is created: a save file may
+        // have started loading while the database was opening.
+        if (savesFrozen) { db.close(); return; }
         let tx;
         try { tx = db.transaction(IDB_STORE, "readwrite"); }
         catch (e) { console.warn(log, "could not keep files:", e); db.close(); return; }
@@ -164,7 +197,7 @@ window.TakConsole = (function () {
       request.onerror = () => console.warn(log, "could not open file storage:", request.error);
     }
 
-    const worker = new Worker(config.workerUrl || "/tak/console-worker.js");
+    worker = new Worker(config.workerUrl || "/tak/console-worker.js");
     worker.onmessage = (event) => {
       const message = event.data;
       switch (message.type) {
@@ -203,6 +236,20 @@ window.TakConsole = (function () {
         logPrefix: log,
       },
     });
+  }
+
+  // saves.js is shared with tak's own front-end (boot.js) and fetched on
+  // demand, so a game's page does not have to list it. If it cannot be
+  // loaded the game runs as before, without the Saves control.
+  function loadSaveTransfer(url, ready, log) {
+    if (window.TakSaves) { ready(); return; }
+    const script = document.createElement("script");
+    script.src = url;
+    script.onload = () => {
+      if (window.TakSaves) ready();
+    };
+    script.onerror = () => console.warn(log, "the Saves control could not be loaded from", url);
+    document.head.appendChild(script);
   }
 
   return { start: start };

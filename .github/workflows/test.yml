@@ -35,4 +35,4 @@ jobs:
 
     - name: The installed package carries its browser assets
       run: |
-        python -c "import tak.web, os; assert all(os.path.exists(tak.web.assetPath(n)) for n in ('client.js','client.css','boot.js','game-worker.js','console.js','console.css','console-worker.js'))"
+        python -c "import tak.web, os; assert all(os.path.exists(tak.web.assetPath(n)) for n in ('client.js','client.css','boot.js','game-worker.js','console.js','console.css','console-worker.js','saves.js'))"
