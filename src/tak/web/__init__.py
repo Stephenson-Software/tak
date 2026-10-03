@@ -3,7 +3,8 @@
 
 assets/   client.js + client.css (the renderer both web front-ends share),
           boot.js + game-worker.js (the Pyodide transport and runtime loader),
-          console.js + console.css + console-worker.js (the console runtime)
+          console.js + console.css + console-worker.js (the console runtime),
+          saves.js (save download/load) and arcade.js (tak.arcade scores)
 page.py   the single page the server-backed front-end (tak.ui.web) serves,
           with the kit's client and stylesheet inlined
 serve.py  the static server for a Pyodide build - sends the COOP/COEP headers
