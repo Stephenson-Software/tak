@@ -169,3 +169,14 @@ def test_bundle_can_leave_the_kit_out(tmp_path):
     output = build(str(tmp_path), includeTak=False)
     with zipfile.ZipFile(output) as bundle:
         assert not any(n.startswith("src/tak/") for n in bundle.namelist())
+
+
+def test_a_failed_save_restore_never_syncs():
+    # boot.js replaces the whole store with each save, so syncing after a
+    # failed read would replace the player's saves with this session's.
+    worker = readAsset("game-worker.js")
+    assert "const restored = await loadSavesFromIDB(" in worker
+    assert "if (restored) {\n            globalThis.syncSaves = makeSyncSaves(" in worker
+    assert worker.count("globalThis.syncSaves =") == 1
+    assert "type: 'nosave'" in worker
+    assert 'message.type === "nosave"' in readAsset("boot.js")
