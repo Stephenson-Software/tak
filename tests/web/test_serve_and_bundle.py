@@ -180,3 +180,12 @@ def test_a_failed_save_restore_never_syncs():
     assert worker.count("globalThis.syncSaves =") == 1
     assert "type: 'nosave'" in worker
     assert 'message.type === "nosave"' in readAsset("boot.js")
+
+
+def test_the_game_worker_brings_its_own_blocking_sleep():
+    # tak.ui.pyodide polls for input with time.sleep; Pyodide's own sleep
+    # dies under a Safari user agent, so the worker replaces it.
+    worker = readAsset("game-worker.js")
+    assert "globalThis.takSleep" in worker
+    assert "Atomics.wait(sleepCell, 0, 0, ms)" in worker
+    assert "_time.sleep = _sleep" in worker
