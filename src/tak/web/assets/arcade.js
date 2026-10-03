@@ -26,7 +26,9 @@ window.TakArcade = (function () {
 
   const API = "https://api.play.danielstephenson.dev";
   const GAME_HOST = /^[a-z][a-z0-9-]{1,30}\.play\.danielstephenson\.dev$/;
-  const ID = /^[a-z][a-z0-9-]{1,30}$/;
+  const ID_PATTERN = /^[a-z][a-z0-9-]{1,30}$/;
+  // A real string only: RegExp.test(undefined) tests the text "undefined".
+  const ID = { test: function (value) { return typeof value === "string" && ID_PATTERN.test(value); } };
   const RUN = /^[A-Za-z0-9._:-]{1,64}$/;
   const SESSION_TTL_MS = 60 * 1000;
   let retryMs = 30 * 1000;

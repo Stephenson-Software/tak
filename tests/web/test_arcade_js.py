@@ -81,7 +81,8 @@ const at = (url) => ({ protocol: url.split("//")[0], hostname: url.split("//")[1
   await run("malformed", () => { A._setPlace(() => at("https://fishe.play.danielstephenson.dev")); session = { signedIn: true }; },
     ["{not json", "null", JSON.stringify({ kind: "score", board: "../admin", value: 1 }),
      JSON.stringify({ kind: "score", board: "b-1", value: "1" }), JSON.stringify({ kind: "score", board: "b-1", value: 1, run: "a b" }),
-     JSON.stringify({ kind: "unlock", achievement: "X" }), JSON.stringify({ kind: "delete" })]);
+     JSON.stringify({ kind: "unlock", achievement: "X" }), JSON.stringify({ kind: "delete" }),
+     JSON.stringify({ kind: "unlock" }), JSON.stringify({ kind: "score", value: 1 })]);
   await run("serverErrorRetriedOnce", () => { A._setPlace(() => at("https://fishe.play.danielstephenson.dev")); answers = [503, 503, 503]; }, [unlock]);
   await run("networkRetriedOnce", () => { A._setPlace(() => at("https://fishe.play.danielstephenson.dev")); answers = ["fail", 200]; }, [unlock]);
   await run("refusalNotRetried", () => { A._setPlace(() => at("https://fishe.play.danielstephenson.dev")); answers = [422]; }, [score]);
