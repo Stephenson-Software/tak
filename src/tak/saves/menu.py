@@ -40,6 +40,12 @@ def chooseSlot(userInterface, saveFileManager, title, describe):
             actions.append(("load", save["slot"]))
 
         next_slot = saveFileManager.get_next_available_slot()
+        if next_slot is not None and _slotHoldsFiles(saveFileManager, next_slot):
+            # get_next_available_slot already skips such a slot; this is the
+            # last check, for a manager that computes "next" some other way.
+            # The option is left out rather than refused after it is picked,
+            # so a front-end that keeps answering the same number cannot loop.
+            next_slot = None
         if next_slot is not None:
             options.append("Create New Save (Slot %d)" % next_slot)
             actions.append(("new", next_slot))
@@ -52,15 +58,6 @@ def chooseSlot(userInterface, saveFileManager, title, describe):
         choice = int(userInterface.showOptions(title, options, unavailable))
         kind, arg = actions[choice - 1]
 
-        if kind == "new" and _slotHoldsFiles(saveFileManager, arg):
-            # get_next_available_slot already skips such a slot; this is the
-            # last check before a new run is written into it, for a manager
-            # that computes "next" some other way.
-            userInterface.showDialogue(
-                "Slot %d already holds files, so a new save was not started "
-                "there - nothing in it was changed." % arg
-            )
-            continue
         if kind in ("load", "new"):
             saveFileManager.select_save_slot(arg)
             return kind, arg
@@ -117,6 +114,7 @@ def deleteSlot(userInterface, saveFileManager, title, save_files):
 
 def _slotHoldsFiles(saveFileManager, slot):
     """True if a new run must not be started in slot. A manager without
-    slot_holds_files (one not built on SaveFileManager) is not checked."""
+    slot_holds_files (one not built on SaveFileManager) is not checked, and
+    only a real True counts (a test's stand-in manager answers with mocks)."""
     check = getattr(saveFileManager, "slot_holds_files", None)
-    return bool(check(slot)) if callable(check) else False
+    return callable(check) and check(slot) is True

@@ -209,7 +209,7 @@ def test_slots_hidden_from_the_list_are_still_taken(tmp_path, monkeypatch):
     assert readAll(root) == before
 
 
-def test_choose_slot_refuses_a_new_run_in_an_occupied_slot(tmp_path):
+def test_choose_slot_never_offers_a_new_run_in_an_occupied_slot(tmp_path):
     root = str(tmp_path)
     writeSlot(root, 1, '{"loop": 7}')
     before = readAll(root)
@@ -222,8 +222,22 @@ def test_choose_slot_refuses_a_new_run_in_an_occupied_slot(tmp_path):
             return 1  # what an empty list used to produce
 
     m = Stale(root, readMetadata=lambda p, d: {"loop": d["loop"]})
-    ui = ScriptedUI(["1", "2"])  # Create New Save (Slot 1), then Quit
+    ui = ScriptedUI(["1"])  # the only option left: Quit
     assert chooseSlot(ui, m, "T", describe) is None
-    assert any("already holds files" in d for d in ui.dialogues)
+    assert ui.menus[0][1] == ["Quit"]
     assert m.selected_save_slot is None
     assert readAll(root) == before
+
+
+def test_choose_slot_with_a_stand_in_manager_still_offers_a_new_save():
+    # Games test their menus with MagicMock managers, whose slot_holds_files
+    # answers with a mock: that must not read as "occupied" (it once made
+    # FishE's test loop forever).
+    from unittest.mock import MagicMock
+
+    m = MagicMock()
+    m.list_save_files.return_value = []
+    m.get_next_available_slot.return_value = 1
+    ui = ScriptedUI(["1"])
+    assert chooseSlot(ui, m, "T", describe) == ("new", 1)
+    m.select_save_slot.assert_called_once_with(1)
