@@ -161,12 +161,24 @@ window.TakCloud = (function () {
     return true;
   }
 
+  // The name a unit changed on two devices keeps this device's copy under:
+  // the next free slot_N (the rule of get_next_available_slot), or null when
+  // there is none (not a slot_N unit, or all 99 slots in use). `taken` is a
+  // Set of every name already in use. A game whose units are not slots (Roam's
+  // worlds) passes its own rule to merge3 / createEngine as `freeName`.
+  function nextFreeSlot(name, taken) {
+    if (!SLOT.test(name)) return null;
+    for (let n = 1; n <= MAX_SLOTS; n++) if (!taken.has("slot_" + n)) return "slot_" + n;
+    return null;
+  }
+
   // Per-unit three-way merge (RFC 0016 §4.4). Each argument is
-  // {name: unitFiles}. Returns {merged, kept}: kept lists the new slots that
+  // {name: unitFiles}. Returns {merged, kept}: kept lists the new names that
   // hold this device's copy of a unit that changed on two devices. Throws
-  // Unresolvable when such a copy cannot be given a new name (not a slot_N
-  // unit, or all 99 slots in use) - nothing is written then.
-  async function merge3(base, head, local, root) {
+  // Unresolvable when such a copy cannot be given a new name (freeName
+  // returned null) - nothing is written then.
+  async function merge3(base, head, local, root, freeName) {
+    const pickName = typeof freeName === "function" ? freeName : nextFreeSlot;
     const b = await shasOf(base), h = await shasOf(head), l = await shasOf(local);
     const names = Array.from(new Set(Object.keys(base).concat(Object.keys(head), Object.keys(local)))).sort();
     const merged = {};
@@ -187,10 +199,8 @@ window.TakCloud = (function () {
     for (const name of conflicts) {
       const key = await contentKey(local[name], root, name);
       if (present.has(key)) continue;   // that copy is already in the merged set
-      if (!SLOT.test(name)) throw new Unresolvable(name);
-      let free = null;
-      for (let n = 1; n <= MAX_SLOTS; n++) if (!taken.has("slot_" + n)) { free = "slot_" + n; break; }
-      if (!free) throw new Unresolvable(name);
+      const free = pickName(name, taken);
+      if (typeof free !== "string" || !free || taken.has(free) || free.indexOf("/") >= 0) throw new Unresolvable(name);
       taken.add(free);
       merged[free] = rename(local[name], root, name, free);
       present.add(key);
@@ -212,6 +222,9 @@ window.TakCloud = (function () {
   //          (reject, writing nothing) if the store no longer equals
   //          `expected`, the files this merge was computed from.
   //   format: "tak-saves"
+  //   freeName(name, taken) -> string|null: optional, the name for this
+  //          device's copy of a unit changed on two devices (default: the
+  //          next free slot_N; see nextFreeSlot)
   function createEngine(options) {
     const root = options.root;
     const api = options.api;
@@ -391,7 +404,7 @@ window.TakCloud = (function () {
       const current = await view(localUnits, base);
       if (!current) return result("unknown", "base-incomplete");
       let merge;
-      try { merge = await merge3(mergeBase, headUnits, current, root); }
+      try { merge = await merge3(mergeBase, headUnits, current, root, options.freeName); }
       catch (e) {
         if (e instanceof Unresolvable) { paused = "unresolvable"; return result("paused", "unresolvable"); }
         throw e;
@@ -924,6 +937,16 @@ window.TakCloud = (function () {
     onArcade: onArcade,
     API: API,
     PRESTART_BUDGET_MS: PRESTART_BUDGET_MS,
+    // The engine, for a page that is not a tak game but speaks the same
+    // protocol (Roam vendors this file and supplies its own storage and UI).
+    canonical: canonical,
+    sha256: sha256,
+    unitsOf: unitsOf,
+    flatten: flatten,
+    merge3: merge3,
+    nextFreeSlot: nextFreeSlot,
+    createEngine: createEngine,
+    Unresolvable: Unresolvable,
     // Exposed for tests.
     _canonical: canonical,
     _sha256: sha256,

@@ -216,6 +216,38 @@ def test_the_merge_keeps_both_copies_and_never_takes_the_newest():
 
 
 @needsNode
+def test_a_game_can_name_the_kept_copy_its_own_way():
+    # Roam keeps worlds, not slots: its copy of a world changed on two devices
+    # is "<world>-from-<device>". The hook gets every name in use; a name that
+    # is taken, empty or a path is refused (Unresolvable, nothing written).
+    script = PRELUDE + r"""
+(async () => {
+  const w = (name, v) => ({ [name]: { ["/saves/" + name + "/tick.json"]: v } });
+  const seen = [];
+  const hook = (name, taken) => { seen.push([name, Array.from(taken).sort()]); return name + "-from-phone"; };
+  const named = await C.merge3(w("save_1", "b"), w("save_1", "h"), w("save_1", "l"), "/saves", hook);
+  const refusals = [];
+  for (const bad of [() => "save_1", () => "", () => "a/b", () => null]) {
+    try { await C.merge3(w("save_1", "b"), w("save_1", "h"), w("save_1", "l"), "/saves", bad); refusals.push(false); }
+    catch (e) { refusals.push(e instanceof C.Unresolvable); }
+  }
+  const aliases = ["canonical", "sha256", "unitsOf", "merge3", "createEngine", "Unresolvable"].every((k) => C[k] === C["_" + k]);
+  console.log(JSON.stringify({ named, seen, refusals, aliases, slot: C.nextFreeSlot("slot_2", new Set(["slot_1", "slot_2"])) }));
+})();
+"""
+    out = _node(script)
+    assert out["named"]["kept"] == ["save_1-from-phone"]
+    assert out["named"]["merged"]["save_1"] == {"/saves/save_1/tick.json": "h"}
+    assert out["named"]["merged"]["save_1-from-phone"] == {
+        "/saves/save_1-from-phone/tick.json": "l"
+    }
+    assert out["seen"] == [["save_1", ["save_1"]]]
+    assert out["refusals"] == [True, True, True, True]
+    assert out["aliases"] is True
+    assert out["slot"] == "slot_3"
+
+
+@needsNode
 @pytest.mark.parametrize("code", [0, 401, 403, 404, 409, 413, 422, 429, 500, 503])
 def test_an_unknown_cloud_is_never_read_as_empty(code):
     script = PRELUDE + r"""
