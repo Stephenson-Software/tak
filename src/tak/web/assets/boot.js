@@ -12,7 +12,9 @@
 //
 // It also puts a "Saves" control under the game (saves.js, loaded from
 // config.savesUrl, default /tak/saves.js): download the saves as a file, and
-// load them from one. A game's tak.arcade scores and unlocks are sent on by
+// load them from one. With `cloudSaves: true`, on arcade only, cloud.js
+// (config.cloudUrl, default /tak/cloud.js) adds cloud backup to that control
+// (RFC 0016); see the cloud section below. A game's tak.arcade scores and unlocks are sent on by
 // arcade.js (config.arcadeUrl, default /tak/arcade.js), loaded only when the
 // game first reports one.
 //
@@ -47,22 +49,75 @@ window.TakBoot = (function () {
     // what the import writes before the page reloads. See saves.js.
     let savesFrozen = false;
     let worker = null;
+    let cloud = null;   // cloud.js's handle, once attached (cloud saves only)
+    let cloudRestoreFailed = false;
     function stopForSaveTransfer() {
       savesFrozen = true;
       if (worker) worker.terminate();
+      if (cloud) cloud.stopped();
       setStatus("The game was stopped to load your saves.", false);
     }
+    // -- Cloud saves (cloud.js, RFC 0016) ----------------------------------------
+    // Only for a game that opts in, only on arcade. In a browser that has
+    // turned cloud backup on for this game, a sync runs BEFORE the Worker
+    // starts (at most PRESTART_BUDGET_MS; it may pull newer saves from the
+    // player's other devices, which reloads the page). Anywhere else, and for
+    // a player who has not turned it on, the game starts exactly as before and
+    // no request is made to /v1/saves.
+    const cloudWanted = config.cloudSaves === true && onArcadeHost();
+    let startGate = null;   // resolves when the Worker may start
+    let savesHandle = null;
+    let resolveSaves;
+    const savesReady = new Promise((resolve) => { resolveSaves = resolve; });
     // Added before anything that can refuse to start the game, so that saves
     // stored earlier can still be downloaded from a browser that cannot run it.
     loadSaveTransfer(config.savesUrl || "/tak/saves.js", function () {
-      window.TakSaves.attach({
+      savesHandle = window.TakSaves.attach({
         idbName: idbName,
         root: saveDir,
         after: document.getElementById("app") || statusEl,
         stop: stopForSaveTransfer,
         log: log,
       });
-    }, log);
+      resolveSaves(savesHandle);
+    }, log, function () { resolveSaves(null); });
+    if (cloudWanted) {
+      startGate = cloudPreStart();
+    }
+
+    function cloudPreStart() {
+      let decided = false;
+      let open;
+      const gate = new Promise((resolve) => { open = resolve; });
+      const go = () => { if (!decided) { decided = true; open(); } };
+      const optedIn = (function () {
+        try { return localStorage.getItem("tak-cloud:" + idbName + ":enrolled") === "1"; } catch (e) { return false; }
+      })();
+      // Never wait on the network for a browser that has not opted in.
+      if (!optedIn) go();
+      else setTimeout(go, 4000);   // the whole budget, script loading included
+      savesReady.then((handle) => new Promise((resolve) => {
+        if (!handle || !window.TakSaves.internals) { resolve(null); return; }
+        loadCloud(config.cloudUrl || "/tak/cloud.js", () => resolve(handle), log);
+      })).then((handle) => {
+        if (!handle || !window.TakCloud) { go(); return; }
+        cloud = window.TakCloud.attach({
+          idbName: idbName,
+          root: saveDir,
+          log: log,
+          saves: handle,
+          savesApi: window.TakSaves.internals,
+          onStopOtherTabs: handle.broadcastStop,
+        });
+        if (savesFrozen) cloud.stopped();
+        if (cloudRestoreFailed) cloud.restoreFailed();
+        if (!optedIn) return;
+        // A pull may begin only while the game has not started; once it has
+        // begun, the game waits for the reload that follows it.
+        return cloud.preStart(() => { if (decided) return false; decided = true; return true; }).then(go, go);
+      }).catch((e) => { console.warn(log, "cloud saves are unavailable:", e); go(); });
+      return gate;
+    }
 
     // -- Input transport: SharedArrayBuffer ring buffer ----------------------
     //
@@ -141,7 +196,9 @@ window.TakBoot = (function () {
         let tx;
         try { tx = db.transaction(IDB_STORE, "readwrite"); }
         catch (e) { console.warn(log, "could not save to IndexedDB:", e); db.close(); return; }
-        tx.oncomplete = () => db.close();
+        // Cloud backup (if on) trails a save that has COMMITTED, never one
+        // that might still abort.
+        tx.oncomplete = () => { db.close(); if (cloud) cloud.committed(deleted); };
         tx.onerror    = () => { console.warn(log, "save failed:", tx.error); db.close(); };
         tx.onabort    = () => { console.warn(log, "save not written, stored saves unchanged:", tx.error); db.close(); };
         mirrorToStore(tx.objectStore(IDB_STORE), files, deleted, log);
@@ -168,60 +225,77 @@ window.TakBoot = (function () {
     }
 
     // -- Worker ----------------------------------------------------------------
-    worker = new Worker(config.workerUrl || "/tak/game-worker.js");
-    worker.onmessage = (e) => {
-      const message = e.data;
-      if (typeof message === "string") {
-        let frame;
-        try { frame = JSON.parse(message); }
-        catch (err) { console.warn(log, "unreadable frame:", err); return; }
-        if (frame.type === "screen") {
-          setStatus("");           // the game is up; stop showing boot progress
-          TakClient.render(frame.screen);
+    if (startGate) startGate.then(startWorker);
+    else startWorker();
+
+    function startWorker() {
+      if (savesFrozen) return;   // a save file is being loaded; the page reloads
+      worker = new Worker(config.workerUrl || "/tak/game-worker.js");
+      worker.onmessage = (e) => {
+        const message = e.data;
+        if (typeof message === "string") {
+          let frame;
+          try { frame = JSON.parse(message); }
+          catch (err) { console.warn(log, "unreadable frame:", err); return; }
+          if (frame.type === "screen") {
+            setStatus("");           // the game is up; stop showing boot progress
+            TakClient.render(frame.screen);
+          }
+          return;
         }
-        return;
-      }
-      if (message.type === "status") { setStatus(message.msg); return; }
-      if (message.type === "ready")  { return; }
-      if (message.type === "save")   { idbWrite(message.files, message.deleted); return; }
-      if (message.type === "arcade") { arcade(message.request); return; }
-      if (message.type === "nosave") {
-        // A notice of its own, above the game: the status line is cleared as
-        // soon as the first screen renders, and this must stay visible.
-        const notice = document.createElement("div");
-        notice.className = "status error tak-nosave";
-        notice.setAttribute("role", "alert");
-        notice.textContent = message.msg;
-        const app = document.getElementById("app");
-        if (app && app.parentNode) app.parentNode.insertBefore(notice, app);
-        else document.body.insertBefore(notice, document.body.firstChild);
-        return;
-      }
-      if (message.type === "error")  {
-        setStatus("The game stopped: " + message.msg + " — reload the page to start again. " +
-                  "Your saved games are stored in this browser and are not affected.", true);
-      }
-    };
-    worker.onerror = (e) => {
-      setStatus("The game could not be started: " + (e.message || "unknown error") +
-                " — reload the page to try again.", true);
-    };
-    worker.postMessage({
-      type: "init",
-      sab: sab,
-      ringSize: RING_SIZE,
-      config: {
-        idbName: idbName,
-        saveDir: saveDir,
-        saveDirEnv: config.saveDirEnv || "TAK_SAVE_DIR",
-        bundleUrl: config.bundleUrl || "/web/game.zip",
-        entry: config.entry || "web/pyodide_main.py",
-        packages: config.packages || [],
-        pyodideUrl: config.pyodideUrl,
-        messages: config.messages || {},
-        logPrefix: log,
-      },
-    });
+        if (message.type === "status") { setStatus(message.msg); return; }
+        if (message.type === "ready")  { return; }
+        if (message.type === "save")   { idbWrite(message.files, message.deleted); return; }
+        if (message.type === "arcade") { arcade(message.request); return; }
+        if (message.type === "nosave") {
+          // Nothing is uploaded from a session whose restore failed.
+          if (cloud) cloud.restoreFailed();
+          cloudRestoreFailed = true;
+          // A notice of its own, above the game: the status line is cleared as
+          // soon as the first screen renders, and this must stay visible.
+          const notice = document.createElement("div");
+          notice.className = "status error tak-nosave";
+          notice.setAttribute("role", "alert");
+          notice.textContent = message.msg;
+          const app = document.getElementById("app");
+          if (app && app.parentNode) app.parentNode.insertBefore(notice, app);
+          else document.body.insertBefore(notice, document.body.firstChild);
+          return;
+        }
+        if (message.type === "error")  {
+          setStatus("The game stopped: " + message.msg + " — reload the page to start again. " +
+                    "Your saved games are stored in this browser and are not affected.", true);
+        }
+      };
+      worker.onerror = (e) => {
+        setStatus("The game could not be started: " + (e.message || "unknown error") +
+                  " — reload the page to try again.", true);
+      };
+      worker.postMessage({
+        type: "init",
+        sab: sab,
+        ringSize: RING_SIZE,
+        config: {
+          idbName: idbName,
+          saveDir: saveDir,
+          saveDirEnv: config.saveDirEnv || "TAK_SAVE_DIR",
+          bundleUrl: config.bundleUrl || "/web/game.zip",
+          entry: config.entry || "web/pyodide_main.py",
+          packages: config.packages || [],
+          pyodideUrl: config.pyodideUrl,
+          messages: config.messages || {},
+          logPrefix: log,
+        },
+      });
+    }
+  }
+
+  function onArcadeHost() {
+    try {
+      return location.protocol === "https:" &&
+        /^[a-z][a-z0-9-]{1,30}\.play\.danielstephenson\.dev$/.test(location.hostname) &&
+        location.hostname.indexOf("api.") !== 0;
+    } catch (e) { return false; }
   }
 
   // One sync, applied to the store inside the caller's readwrite transaction.
@@ -259,14 +333,29 @@ window.TakBoot = (function () {
   // saves.js is shared with the console runtime and fetched on demand, so a
   // game's index.html does not have to list it. If it cannot be loaded the
   // game runs exactly as before, just without the Saves control.
-  function loadSaveTransfer(url, ready, log) {
+  function loadSaveTransfer(url, ready, log, failed) {
     if (window.TakSaves) { ready(); return; }
     const script = document.createElement("script");
     script.src = url;
     script.onload = () => {
       if (window.TakSaves) ready();
+      else if (failed) failed();
     };
-    script.onerror = () => console.warn(log, "the Saves control could not be loaded from", url);
+    script.onerror = () => {
+      console.warn(log, "the Saves control could not be loaded from", url);
+      if (failed) failed();
+    };
+    document.head.appendChild(script);
+  }
+
+  // cloud.js: ready() runs once it has loaded or failed to; boot.js checks
+  // window.TakCloud itself.
+  function loadCloud(url, ready, log) {
+    if (window.TakCloud) { ready(); return; }
+    const script = document.createElement("script");
+    script.src = url;
+    script.onload = ready;
+    script.onerror = () => { console.warn(log, "cloud saves could not be loaded from", url); ready(); };
     document.head.appendChild(script);
   }
 

@@ -262,10 +262,20 @@ window.TakSaves = (function () {
     } finally { db.close(); }
   }
 
-  async function writeBackup(idbName, doc) {
+  // kind: "import" (a file the player loaded; key = the time) or "cloud" (a
+  // cloud pull, cloud.js; key = "cloud:" + the time). Each kind keeps its own
+  // newest BACKUPS_KEPT, so a run of automatic pulls can never push out the
+  // backup taken before a manual load (RFC 0016 §5).
+  function backupKind(key) {
+    return String(key).indexOf("cloud:") === 0 ? "cloud" : "import";
+  }
+
+  async function writeBackup(idbName, doc, kind) {
     const db = await openDb(idbName + BACKUP_SUFFIX, BACKUP_STORE);
     try {
-      const key = doc.exported;
+      kind = kind === "cloud" ? "cloud" : "import";
+      const key = kind === "cloud" ? "cloud:" + doc.exported : doc.exported;
+      if (kind === "cloud") doc = Object.assign({}, doc, { cloudBackup: true });
       let tx = db.transaction(BACKUP_STORE, "readwrite");
       let done = finish(tx);
       tx.objectStore(BACKUP_STORE).put(doc, key);
@@ -282,8 +292,9 @@ window.TakSaves = (function () {
       if (!stored || JSON.stringify(stored.files) !== JSON.stringify(doc.files)) {
         throw new Error("the backup did not read back as written");
       }
-      // Keep the newest few. Only ever after the new one is safely stored.
-      const keys = await listBackupKeys(db);
+      // Keep the newest few of this kind. Only ever after the new one is
+      // safely stored.
+      const keys = (await listBackupKeys(db)).filter((k) => backupKind(k) === kind);
       const old = keys.slice(0, Math.max(0, keys.length - BACKUPS_KEPT));
       if (old.length) {
         tx = db.transaction(BACKUP_STORE, "readwrite");
@@ -405,6 +416,7 @@ window.TakSaves = (function () {
     const log = options.log || "[tak]";
     const stop = options.stop || function () {};
     let stopped = false;
+    let extraMenu = null;   // cloud.js adds its section here (setExtraMenu)
 
     function stopGame() {
       if (stopped) return;
@@ -487,10 +499,14 @@ window.TakSaves = (function () {
     async function showMenu(notice, noticeIsError) {
       const nodes = [
         element("h3", null, "Your saves"),
-        element("p", null, "Your saved games are kept in this browser only. Download them to keep a " +
-          "copy, or to carry them to another browser or device and load them there."),
+        element("p", null, (extraMenu ? "Your saved games are kept in this browser. " : "Your saved games are kept in this browser only. ") +
+          "Download them to keep a copy, or to carry them to another browser or device and load them there."),
       ];
       if (notice) nodes.push(message(notice, noticeIsError));
+      if (extraMenu) {
+        try { nodes.push(...(await extraMenu())); }
+        catch (e) { console.warn(log, "the cloud section could not be shown:", e); }
+      }
       const actions = [
         button("Download my saves", "tak-saves-primary", exportSaves),
         button("Load saves from a file", null, () => { fileInput.value = ""; fileInput.click(); }),
@@ -505,7 +521,9 @@ window.TakSaves = (function () {
             "file puts back every save that load replaced."));
           const list = element("div", "tak-saves-actions");
           for (const backup of backups) {
-            list.appendChild(button("Download backup from " + backup.exported.replace("T", " ").slice(0, 16),
+            const cloud = backup.cloudBackup === true;
+            list.appendChild(button("Download backup from " + backup.exported.replace("T", " ").slice(0, 16) +
+              (cloud ? " (before a cloud sync)" : ""),
               null, () => download(backup, exportName(idbName, backup.exported, "backup"))));
           }
           backupNodes.push(list);
@@ -543,13 +561,19 @@ window.TakSaves = (function () {
       let text;
       try { text = await file.text(); }
       catch (e) { showMenu("That file could not be read. Nothing was changed.", true); return; }
+      importText(text);
+    });
+
+    // The whole import, from validation to reload, for a file's text: "Load
+    // saves from a file", and cloud.js's "Load this version".
+    async function importText(text) {
       const parsed = parseImport(text, idbName, root);
       if (!parsed.ok) { showMenu(parsed.reason, true); return; }
       let current;
       try { current = await readStore(idbName); }
       catch (e) { showMenu("Your current saves could not be read, so nothing was loaded (loading now could not keep them safe). Nothing was changed.", true); return; }
       confirmImport(parsed, compare(current, parsed.files), false);
-    });
+    }
 
     function pathList(title, paths) {
       if (!paths.length) return [];
@@ -634,11 +658,33 @@ window.TakSaves = (function () {
       location.reload();
     }
 
-    return { showMenu: showMenu, element: bar };
+    return {
+      showMenu: showMenu,
+      element: bar,
+      importText: importText,
+      setExtraMenu: (fn) => { extraMenu = fn; },
+      ui: { element: element, button: button, message: message, render: render, showDialog: showDialog, close: close, download: download },
+      broadcastStop: async () => {
+        if (!channel) return;
+        try { channel.postMessage({ type: "import" }); } catch (e) {}
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      },
+    };
   }
 
   return {
     attach: attach,
+    // For cloud.js: the import's own pieces, so a cloud pull takes exactly
+    // the same path into the store (RFC 0016 §4: "a pull is an import").
+    internals: {
+      readStore: readStore,
+      writeBackup: writeBackup,
+      mergeIntoStore: mergeIntoStore,
+      buildExport: buildExport,
+      parseImport: parseImport,
+      sameValue: sameValue,
+      compare: compare,
+    },
     // Exposed for tests.
     _parseImport: parseImport,
     _buildExport: buildExport,
