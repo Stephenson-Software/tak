@@ -184,6 +184,48 @@ browser's storage, so the game keeps running.
 A tab still running a tak release from before this feature cannot be told to stop, so close
 other tabs of the game before loading saves.
 
+## Cloud saves on arcade
+
+A game on arcade (`https://<slug>.play.danielstephenson.dev`) can let a signed-in player back
+its saves up to their arcade-social account and get them on their other devices
+(Stephenson-Software RFC 0016). It is opt-in twice: the game sets `cloudSaves: true` in
+`TakBoot.start`, and arcade-social must list the game in the gateway's `config/play/saves.yaml`.
+Then the **Saves** panel offers **Turn on cloud backup** to a signed-in player. Nothing is sent
+until the player turns it on, anywhere else (localhost, an alias host, a desktop build) nothing is
+loaded at all, and the console runtime does not support it.
+
+```js
+TakBoot.start({ idbName: "night-ferry-saves", /* ... */ cloudSaves: true });
+```
+
+`boot.js` then loads `/tak/cloud.js` (`cloudUrl` to override). The game still saves to IndexedDB
+first, exactly as before, and the cloud is never in the save path:
+
+- **Backup (Stage 1).** After each committed save (at most one upload per 30 s) the store is
+  uploaded as a save file, based on the version this browser last uploaded or pulled. The server
+  refuses anything not based on its newest version (409); the page then merges **per slot**, and a
+  slot changed on two devices is **kept twice**, the second copy going into the next free
+  `slot_N`. Nothing is ever newest-wins. **Saves → Cloud versions** lists every version, each with
+  **Load this version** (the file import above, with its preview, backup and reload) and
+  **Download**.
+- **Sync (Stage 2, when `saves.yaml` sets `pull: true`).** In a browser that turned it on, a
+  sync runs before the game starts (at most about 3 s; a slow network delays nothing longer). If
+  the account has newer saves, they come down **as an import**: validated, the store backed up
+  into `<idbName>.tak-backups` and read back first, written put-only (no local file is ever
+  deleted), read back, then the page reloads once. A pull never begins after the game has started.
+- **Errors are never "empty".** A failure of any kind (offline, signed out, a 5xx, the kill switch)
+  is "unknown": nothing is uploaded or written because of it, and the panel says "Not backed up".
+- **Lost slots are carried, not dropped.** A slot missing from this browser that the game did not
+  delete is kept in the cloud from the last version, restored here at the next load, and if a new
+  game is started in that slot meanwhile, both are kept.
+- **Deletions stay local.** A slot deleted in the game is deleted in the cloud's newest version
+  (history keeps it), but never on another device: it stays there until deleted there too.
+- **A session whose restore failed uploads nothing.**
+
+`cloud.js`'s engine is tested under Node by `tests/web/test_cloud_saves.py`, including a
+randomized three-device test (`tests/web/cloud_sim.js`) against an in-memory server with
+arcade-social's rules; arcade-social keeps a Python copy of the same algorithm in its own tests.
+
 ## Scores and achievements on arcade
 
 `tak.arcade` reports a player's scores and achievement unlocks to
