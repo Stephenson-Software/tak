@@ -389,6 +389,9 @@ window.TakSaves = (function () {
 .tak-saves-message { margin: .5rem 0; color: #9fd0ff; }
 .tak-saves-message.error { color: #ff8a8a; }
 .tak-saves-note { color: #9fb6c6; font-size: .9rem; }
+.tak-saves-dialog a, .tak-saves-dialog a:visited { color: #9fd0ff; text-decoration: underline; }
+.tak-saves-dialog a:hover { color: #c8e6ff; }
+.tak-saves-dialog a:focus-visible { outline: 2px solid #9fd0ff; outline-offset: 2px; }
 @media (max-width: 600px) { .tak-saves-actions button { flex: 1 1 100%; } }
 `;
 
