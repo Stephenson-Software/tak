@@ -39,6 +39,24 @@ def test_the_control_offers_download_and_load():
     assert "font: 16px" in saves
 
 
+def _contrast(foreground, background):
+    def luminance(hex_colour):
+        channels = [int(hex_colour[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    lighter, darker = sorted((luminance(foreground), luminance(background)), reverse=True)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def test_links_in_the_panel_are_readable_on_its_dark_background():
+    # A link (cloud.js's "Manage or delete your cloud saves") kept the browser's
+    # default dark blue on the dark panel. WCAG AA asks for 4.5:1.
+    saves = readAsset("saves.js")
+    assert "background: #0f2433;" in saves
+    assert ".tak-saves-dialog a, .tak-saves-dialog a:visited { color: #9fd0ff;" in saves
+    assert _contrast("#9fd0ff", "#0f2433") >= 4.5
+
+
 def test_the_export_format_is_the_documented_one():
     saves = readAsset("saves.js")
     assert 'const FORMAT = "tak-saves";' in saves
