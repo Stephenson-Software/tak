@@ -15,7 +15,18 @@ from tak.web import serve as serveModule
 from tak.web.bundle import build
 
 
-REQUIRED_ASSETS = ("client.js", "client.css", "boot.js", "game-worker.js")
+REQUIRED_ASSETS = (
+    "client.js",
+    "client.css",
+    "boot.js",
+    "game-worker.js",
+    "console.js",
+    "console.css",
+    "console-worker.js",
+    "saves.js",
+    "arcade.js",
+    "cloud.js",
+)
 
 
 def test_the_kit_ships_its_browser_assets():
@@ -24,6 +35,12 @@ def test_the_kit_ships_its_browser_assets():
     assert "window.TakClient" in readAsset("client.js")
     assert "window.TakBoot" in readAsset("boot.js")
     assert "SharedArrayBuffer" in readAsset("boot.js")
+
+
+def test_every_asset_in_the_directory_is_a_required_one():
+    # A new asset has to be added above, which is also the reminder that it
+    # must match pyproject.toml's package-data glob to reach an install.
+    assert sorted(os.listdir(ASSET_DIRECTORY)) == sorted(REQUIRED_ASSETS)
 
 
 def test_client_renders_header_chips_generically():
@@ -82,6 +99,13 @@ def test_kit_assets_are_served_under_tak(server):
     response = get(server, "/tak/client.js")
     assert b"window.TakClient" in response.read()
     assert "javascript" in response.headers["Content-Type"]
+    assert response.headers["Cross-Origin-Embedder-Policy"] == "require-corp"
+
+
+@pytest.mark.parametrize("name", REQUIRED_ASSETS)
+def test_every_kit_asset_is_served_under_tak(server, name):
+    response = get(server, "/tak/" + name)
+    assert response.read() == readAsset(name).encode("utf-8")
     assert response.headers["Cross-Origin-Embedder-Policy"] == "require-corp"
 
 
@@ -156,7 +180,8 @@ def test_bundle_carries_the_game_and_the_kit(tmp_path, capsys):
     assert "web/pyodide_main.py" in names and "version.txt" in names
     assert "src/tak/__init__.py" in names
     assert "src/tak/ui/pyodide.py" in names
-    assert "src/tak/web/assets/client.js" in names
+    for asset in REQUIRED_ASSETS:
+        assert "src/tak/web/assets/" + asset in names, asset
     assert not any(n.endswith(".pyc") for n in names)
     assert "missing.txt" not in names
     err = capsys.readouterr().err
