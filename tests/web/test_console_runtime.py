@@ -31,7 +31,9 @@ def test_title_tagline_and_config_cannot_break_out_of_the_page():
     assert "<b>x</b>" not in html
     assert "&lt;b&gt;x&lt;/b&gt;" in html
     assert "&quot;quoted&quot;" in html
-    script = page(title="</script><script>alert(1)</script>", entry="main.py", idbName="x")
+    script = page(
+        title="</script><script>alert(1)</script>", entry="main.py", idbName="x"
+    )
     inline = script.split("TakConsole.start(", 1)[1]
     assert "</script><script>" not in inline.split("</script>")[0]
     assert _config(script)["logPrefix"] == "[</script><script>alert(1)</script>]"
@@ -49,7 +51,15 @@ def test_idb_name_is_required():
 
 
 def test_packages_and_bundle_url_pass_through():
-    config = _config(page(title="t", entry="main.py", idbName="x", packages=("numpy",), bundleUrl="/b.zip"))
+    config = _config(
+        page(
+            title="t",
+            entry="main.py",
+            idbName="x",
+            packages=("numpy",),
+            bundleUrl="/b.zip",
+        )
+    )
     assert config["packages"] == ["numpy"]
     assert config["bundleUrl"] == "/b.zip"
 
@@ -62,7 +72,17 @@ def test_the_runtime_assets_ship_with_the_package(name):
 def test_the_worker_and_page_agree_on_the_message_protocol():
     worker = tak.web.readAsset("console-worker.js")
     client = tak.web.readAsset("console.js")
-    for kind in ("status", "out", "err", "clear", "waiting", "files", "nosave", "exit", "error"):
+    for kind in (
+        "status",
+        "out",
+        "err",
+        "clear",
+        "waiting",
+        "files",
+        "nosave",
+        "exit",
+        "error",
+    ):
         assert "type: '%s'" % kind in worker, kind
         assert 'case "%s"' % kind in client, kind
     assert 'new Worker(config.workerUrl || "/tak/console-worker.js")' in client
