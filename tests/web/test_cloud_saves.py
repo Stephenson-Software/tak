@@ -158,13 +158,16 @@ VECTORS = [
 
 @needsNode
 def test_the_canonical_encoding_matches_the_servers():
-    script = PRELUDE + r"""
+    script = (
+        PRELUDE
+        + r"""
 (async () => {
   const out = [];
   for (const v of arg(0)) out.push([C._canonical(v), await C._sha256(C._canonical(v))]);
   console.log(JSON.stringify(out));
 })();
 """
+    )
     results = _node(script, VECTORS)
     for vector, (text, digest) in zip(VECTORS, results):
         expected = _serverCanonical(vector)
@@ -174,7 +177,9 @@ def test_the_canonical_encoding_matches_the_servers():
 
 @needsNode
 def test_the_merge_keeps_both_copies_and_never_takes_the_newest():
-    script = PRELUDE + r"""
+    script = (
+        PRELUDE
+        + r"""
 (async () => {
   const f = (slot, v) => ({ ["/saves/" + slot + "/save.json"]: v });
   const u = (pairs) => Object.fromEntries(pairs.map(([s, v]) => [s, f(s, v)]));
@@ -194,6 +199,7 @@ def test_the_merge_keeps_both_copies_and_never_takes_the_newest():
   console.log(JSON.stringify({ cases, unresolvable }));
 })();
 """
+    )
     out = _node(script)
     cases = out["cases"]
 
@@ -220,7 +226,9 @@ def test_a_game_can_name_the_kept_copy_its_own_way():
     # Roam keeps worlds, not slots: its copy of a world changed on two devices
     # is "<world>-from-<device>". The hook gets every name in use; a name that
     # is taken, empty or a path is refused (Unresolvable, nothing written).
-    script = PRELUDE + r"""
+    script = (
+        PRELUDE
+        + r"""
 (async () => {
   const w = (name, v) => ({ [name]: { ["/saves/" + name + "/tick.json"]: v } });
   const seen = [];
@@ -235,6 +243,7 @@ def test_a_game_can_name_the_kept_copy_its_own_way():
   console.log(JSON.stringify({ named, seen, refusals, aliases, slot: C.nextFreeSlot("slot_2", new Set(["slot_1", "slot_2"])) }));
 })();
 """
+    )
     out = _node(script)
     assert out["named"]["kept"] == ["save_1-from-phone"]
     assert out["named"]["merged"]["save_1"] == {"/saves/save_1/tick.json": "h"}
@@ -250,7 +259,9 @@ def test_a_game_can_name_the_kept_copy_its_own_way():
 @needsNode
 @pytest.mark.parametrize("code", [0, 401, 403, 404, 409, 413, 422, 429, 500, 503])
 def test_an_unknown_cloud_is_never_read_as_empty(code):
-    script = PRELUDE + r"""
+    script = (
+        PRELUDE
+        + r"""
 (async () => {
   const calls = [];
   const store = { "/saves/slot_1/save.json": "mine" };
@@ -269,6 +280,7 @@ def test_an_unknown_cloud_is_never_read_as_empty(code):
   console.log(JSON.stringify({ outcome, calls, same: JSON.stringify(store) === before }));
 })();
 """
+    )
     out = _node(script, code)
     assert out["outcome"] == "unknown"
     assert out["calls"] == ["status"]
@@ -277,7 +289,9 @@ def test_an_unknown_cloud_is_never_read_as_empty(code):
 
 @needsNode
 def test_a_failed_restore_session_uploads_nothing():
-    script = PRELUDE + r"""
+    script = (
+        PRELUDE
+        + r"""
 (async () => {
   const calls = [];
   const engine = C._createEngine({
@@ -292,6 +306,7 @@ def test_a_failed_restore_session_uploads_nothing():
   console.log(JSON.stringify({ outcome: await engine.afterSave(), calls }));
 })();
 """
+    )
     out = _node(script)
     assert out == {"outcome": "disabled", "calls": []}
 

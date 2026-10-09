@@ -37,7 +37,15 @@ def _escape(text):
     )
 
 
-def page(title, entry, idbName, tagline="", bundleUrl=DEFAULT_BUNDLE_URL, packages=(), footer=""):
+def page(
+    title,
+    entry,
+    idbName,
+    tagline="",
+    bundleUrl=DEFAULT_BUNDLE_URL,
+    packages=(),
+    footer="",
+):
     """The index.html for a console game.
 
     entry is the script to run as __main__, as a path inside the bundle (the
@@ -45,7 +53,9 @@ def page(title, entry, idbName, tagline="", bundleUrl=DEFAULT_BUNDLE_URL, packag
     the program's files are kept in - unique per game, and never changed once
     players have saves in it. footer is optional, already-safe HTML."""
     if not entry or entry.startswith("/") or ".." in entry.split("/"):
-        raise ValueError("entry must be a relative path inside the bundle, got %r" % entry)
+        raise ValueError(
+            "entry must be a relative path inside the bundle, got %r" % entry
+        )
     if not idbName:
         raise ValueError("idbName is required: it is where the game's files are kept")
     config = {
@@ -58,7 +68,9 @@ def page(title, entry, idbName, tagline="", bundleUrl=DEFAULT_BUNDLE_URL, packag
     }
     # </script> cannot appear inside the inline script, whatever the title says.
     configJson = json.dumps(config, indent=2, sort_keys=True).replace("</", "<\\/")
-    taglineHtml = ' <span class="tagline">— %s</span>' % _escape(tagline) if tagline else ""
+    taglineHtml = (
+        ' <span class="tagline">— %s</span>' % _escape(tagline) if tagline else ""
+    )
     return """<!DOCTYPE html>
 <html lang="en">
 <head>
