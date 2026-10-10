@@ -41,10 +41,16 @@ def test_the_control_offers_download_and_load():
 
 def _contrast(foreground, background):
     def luminance(hex_colour):
-        channels = [int(hex_colour[i:i + 2], 16) / 255 for i in (1, 3, 5)]
-        linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+        channels = [int(hex_colour[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+        linear = [
+            c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+            for c in channels
+        ]
         return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
-    lighter, darker = sorted((luminance(foreground), luminance(background)), reverse=True)
+
+    lighter, darker = sorted(
+        (luminance(foreground), luminance(background)), reverse=True
+    )
     return (lighter + 0.05) / (darker + 0.05)
 
 

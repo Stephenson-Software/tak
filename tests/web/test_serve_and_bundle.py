@@ -201,7 +201,9 @@ def test_a_failed_save_restore_never_syncs():
     # failed read would replace the player's saves with this session's.
     worker = readAsset("game-worker.js")
     assert "const restored = await loadSavesFromIDB(" in worker
-    assert "if (restored) {\n            globalThis.syncSaves = makeSyncSaves(" in worker
+    assert (
+        "if (restored) {\n            globalThis.syncSaves = makeSyncSaves(" in worker
+    )
     assert worker.count("globalThis.syncSaves =") == 1
     assert "type: 'nosave'" in worker
     assert 'message.type === "nosave"' in readAsset("boot.js")
