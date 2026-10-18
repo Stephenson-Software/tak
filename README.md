@@ -2,6 +2,10 @@
 
 A text-adventure kit. One user-interface contract with three front-ends behind it — a terminal, a browser that polls a server, and a browser tab that runs the whole game itself under [Pyodide](https://pyodide.org) — plus the pieces a menu-driven text game needs around it: numbered save slots with JSON Schema validation, a progressive-disclosure unlock engine, NPC dialogue with conditional lines, and clock formatting for a day-based header.
 
+![examples/minimal_game.py played in the terminal: an unavailable option, an unlock from the innkeeper, and the gate opening](docs/images/tak-console.gif)
+
+*[`examples/minimal_game.py`](examples/minimal_game.py) played in the console front-end: an unavailable option, a line that unlocks, and the gate opening.*
+
 Extracted from [FishE](https://github.com/Stephenson-Software/FishE). [Tidewater](https://github.com/Stephenson-Software/Tidewater) is the first game built on it; FishE is being moved onto it.
 
 ## Install
@@ -50,6 +54,12 @@ The `header` callable is the game's status line, read fresh before every menu. I
 | `CONSOLE` | the terminal | on disk |
 | `WEB` | a Python process; the browser is a terminal for it (`<PREFIX>_WEB_HOST`/`_PORT`) | on the server's disk, shared by every visitor |
 | `PYODIDE` | inside the player's browser tab | in that browser's IndexedDB |
+
+| Desktop (`--web`) | Phone width |
+|---|---|
+| ![The same example game in the server-web front-end](docs/images/tak-web.png) | ![The same example game at phone width](docs/images/tak-web-phone.png) |
+
+*The same example game in the `WEB` front-end (`python3 examples/minimal_game.py --web`).*
 
 ### Saves
 
@@ -268,6 +278,10 @@ pip install -e '.[dev]'
 ./test.sh
 ./format.sh
 ```
+
+## How the screenshots were captured
+
+`docs/images/tak-console.gif` was recorded on 2026-10-18 from a real run of `python3 examples/minimal_game.py` (Python 3.12, tak installed with `pip install -e .`), with the menu choices typed by a script. The recorded terminal output was rendered to an image with [pyte](https://github.com/selectel/pyte) and [Pillow](https://python-pillow.org/); nothing in it was edited, only the window frame was added. Pauses longer than 2.2 seconds were shortened in the GIF. `docs/images/tak-web.png` and `docs/images/tak-web-phone.png` are headless-Chromium screenshots of `python3 examples/minimal_game.py --web` at 1100 px and 390 px wide, cropped to the game.
 
 ## License
 This project is licensed under the **Stephenson Software Non-Commercial License (Stephenson-NC)**.  
