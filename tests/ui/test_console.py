@@ -1,4 +1,6 @@
 import builtins
+import os
+import shutil
 import time
 
 from tak import NPC, Prompt
@@ -32,6 +34,40 @@ def test_showOptions_prints_header_prompt_and_numbered_options(monkeypatch, caps
     assert " Day 3" in out and " | 8:00 AM" in out and " | Loop 2" in out
     assert "The tide is out." in out
     assert " [1] Fish" in out and " [2] Leave" in out
+
+
+def setWidth(monkeypatch, columns):
+    size = os.terminal_size((columns, 24))
+    monkeypatch.setattr(shutil, "get_terminal_size", lambda *args, **kwargs: size)
+
+
+def test_header_chips_share_one_line(monkeypatch, capsys):
+    setWidth(monkeypatch, 80)
+    ui = makeConsole(["Day 3", {"text": "8:00 AM"}, "Loop 2"])
+    feed(monkeypatch, ["1"])
+    ui.showOptions("Home", ["Sleep"])
+    lines = capsys.readouterr().out.splitlines()
+    assert " Day 3 | 8:00 AM | Loop 2" in lines
+
+
+def test_header_wraps_between_chips_when_the_terminal_is_narrow(monkeypatch, capsys):
+    setWidth(monkeypatch, 16)
+    ui = makeConsole(["Day 3", "8:00 AM", "Loop 2"])
+    feed(monkeypatch, ["1"])
+    ui.showOptions("Home", ["Sleep"])
+    lines = capsys.readouterr().out.splitlines()
+    assert " Day 3 | 8:00 AM" in lines
+    assert " Loop 2" in lines
+
+
+def test_header_chip_wider_than_the_terminal_is_not_split(monkeypatch, capsys):
+    setWidth(monkeypatch, 8)
+    ui = makeConsole(["A very long chip", "B"])
+    feed(monkeypatch, ["1"])
+    ui.showOptions("Home", ["Sleep"])
+    lines = capsys.readouterr().out.splitlines()
+    assert " A very long chip" in lines
+    assert " B" in lines
 
 
 def test_showOptions_with_no_header_prints_no_chips(monkeypatch, capsys):
