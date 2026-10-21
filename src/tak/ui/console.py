@@ -1,3 +1,4 @@
+import shutil
 import sys
 import time
 
@@ -19,9 +20,19 @@ class ConsoleUserInterface(BaseUserInterface):
         print("\n")
 
     def _printHeader(self):
-        chips = self.header()["chips"]
-        for index, chip in enumerate(chips):
-            print((" " if index == 0 else " | ") + chip["text"])
+        """Print the chips on one line, " | " between them, starting a new
+        line only between two chips when the next would overflow the
+        terminal - a chip itself is never split."""
+        width = shutil.get_terminal_size().columns
+        lines = []
+        for chip in self.header()["chips"]:
+            text = chip["text"]
+            if lines and len(lines[-1]) + len(" | ") + len(text) <= width:
+                lines[-1] += " | " + text
+            else:
+                lines.append(" " + text)
+        for line in lines:
+            print(line)
 
     def showOptions(self, descriptor, optionList, unavailableOptions=None):
         reasons = self.unavailableReasons(optionList, unavailableOptions)
