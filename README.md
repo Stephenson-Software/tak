@@ -119,6 +119,24 @@ from tak.web.serve import main;    main(ROOT, title="Tidewater", envPrefix="TIDE
 
 `build` puts the game's `src/` and `schemas/` and the tak package itself into `web/game.zip` (an `extraFiles` entry that does not exist is skipped, with a warning on stderr naming it); `serve` sends the `Cross-Origin-Opener-Policy`/`Cross-Origin-Embedder-Policy` headers SharedArrayBuffer needs and serves the kit's assets at `/tak/`. Any proxy in front of it must preserve those headers.
 
+Every `TakBoot.start` key is optional. The defaults fit the layout above:
+
+| Key | Default | What it sets |
+|---|---|---|
+| `idbName` | `"tak-saves"` | The IndexedDB database holding this game's saves. Give each game its own name, and never change it once players have saves under it. |
+| `saveDirEnv` | `"TAK_SAVE_DIR"` | The environment variable set to the save directory before `entry` runs. Use the variable the game's own config reads. |
+| `saveDir` | `"/saves"` | The save directory in Pyodide's filesystem. |
+| `bundleUrl` | `"/web/game.zip"` | Where the Worker downloads the bundle `tak.web.bundle.build` wrote. |
+| `entry` | `"web/pyodide_main.py"` | The file inside the bundle that is run. |
+| `packages` | `[]` | Pyodide packages to load in addition to `jsonschema`, which is always loaded. |
+| `pyodideUrl` | jsDelivr's `pyodide.js` for the version `game-worker.js` pins | Where the Pyodide runtime is loaded from. |
+| `messages` | English boot messages | Overrides for the boot progress text, by key: `runtime`, `restore`, `packages`, `download`, `start`. |
+| `statusElementId` | `"status"` | The element boot progress and errors are shown in. |
+| `logPrefix` | `"[tak]"` | Prefix on the lines the game's output and the kit write to the browser console. |
+| `workerUrl` | `"/tak/game-worker.js"` | Where the Worker script is served. |
+| `savesUrl`, `cloudUrl`, `arcadeUrl` | `"/tak/saves.js"`, `"/tak/cloud.js"`, `"/tak/arcade.js"` | Where the save-transfer, cloud-save and arcade scripts are served (see the sections below). |
+| `cloudSaves` | `false` | Set `true` to turn on cloud saves on arcade. |
+
 ## Running an existing console game in the browser
 
 A small game that only uses `input()` and `print()` does not need rewriting
