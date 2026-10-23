@@ -125,7 +125,7 @@ from tak.web.serve import main;    main(ROOT, title="Tidewater", envPrefix="TIDE
 - `/tak/<name>` serves one of the kit's assets.
 - `/web/...` serves files from the game's `web/` directory, including `game.zip`.
 
-Files the page needs must therefore live under `web/`. It listens on `<PREFIX>_WEB_HOST`/`<PREFIX>_WEB_PORT`, default `127.0.0.1:8080`, where `<PREFIX>` is the `envPrefix` passed to `main`. Set the host to `0.0.0.0` to reach it from a container's port mapping. The default port is deliberately not the `WEB` front-end's `8000`, so both can run at once.
+Files the page needs must therefore live under `web/`. `serve` listens on `<PREFIX>_WEB_HOST`/`<PREFIX>_WEB_PORT`, default `127.0.0.1:8080`, where `<PREFIX>` is the `envPrefix` passed to `main`. Set the host to `0.0.0.0` to reach it from a container's port mapping. The default port is deliberately not the `WEB` front-end's `8000`, so both can run at once.
 
 Every `TakBoot.start` key is optional. The defaults fit the layout above:
 
