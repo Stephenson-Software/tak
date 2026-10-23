@@ -52,7 +52,7 @@ The `header` callable is the game's status line, read fresh before every menu. I
 | `UIType` | Where the game runs | Saves live |
 |---|---|---|
 | `CONSOLE` | the terminal | on disk |
-| `WEB` | a Python process; the browser is a terminal for it (`<PREFIX>_WEB_HOST`/`_PORT`) | on the server's disk, shared by every visitor |
+| `WEB` | a Python process; the browser is a terminal for it (`<PREFIX>_WEB_HOST`/`_PORT`, default `127.0.0.1:8000`) | on the server's disk, shared by every visitor |
 | `PYODIDE` | inside the player's browser tab | in that browser's IndexedDB |
 
 | Desktop (`--web`) | Phone width |
@@ -118,6 +118,14 @@ from tak.web.serve import main;    main(ROOT, title="Tidewater", envPrefix="TIDE
 ```
 
 `build` puts the game's `src/` and `schemas/` and the tak package itself into `web/game.zip` (an `extraFiles` entry that does not exist is skipped, with a warning on stderr naming it); `serve` sends the `Cross-Origin-Opener-Policy`/`Cross-Origin-Embedder-Policy` headers SharedArrayBuffer needs and serves the kit's assets at `/tak/`. Any proxy in front of it must preserve those headers.
+
+`serve` answers three kinds of path and returns 404 for everything else:
+
+- `/`, `/play`, `/play/` and `/index.html` serve the game's `web/index.html`.
+- `/tak/<name>` serves one of the kit's assets.
+- `/web/...` serves files from the game's `web/` directory, including `game.zip`.
+
+Files the page needs must therefore live under `web/`. `serve` listens on `<PREFIX>_WEB_HOST`/`<PREFIX>_WEB_PORT`, default `127.0.0.1:8080`, where `<PREFIX>` is the `envPrefix` passed to `main`. Set the host to `0.0.0.0` to reach it from a container's port mapping. The default port is deliberately not the `WEB` front-end's `8000`, so both can run at once.
 
 Every `TakBoot.start` key is optional. The defaults fit the layout above:
 
