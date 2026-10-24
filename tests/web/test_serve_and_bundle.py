@@ -1,3 +1,4 @@
+import errno
 import io
 import json
 import os
@@ -126,6 +127,7 @@ def test_missing_index_is_a_500_that_names_the_file(gameRoot):
         with pytest.raises(urllib.error.HTTPError) as error:
             get("http://127.0.0.1:%d" % httpd.server_address[1], "/")
         assert error.value.code == 500
+        assert os.path.join("web", "index.html") in error.value.read().decode()
     finally:
         httpd.shutdown()
         httpd.server_close()
@@ -156,6 +158,95 @@ def test_taken_port_is_explained(gameRoot):
     finally:
         blocker.close()
     assert "Tidewater" in str(error.value) and "TIDEWATER_WEB_PORT" in str(error.value)
+
+
+def refuseToBind(monkeypatch, errnoValue, message):
+    def _refuse(*args, **kwargs):
+        raise OSError(errnoValue, message)
+
+    monkeypatch.setattr(serveModule, "_Server", _refuse)
+
+
+def test_a_forbidden_port_is_explained_and_names_both_variables(gameRoot, monkeypatch):
+    refuseToBind(monkeypatch, errno.EACCES, "Permission denied")
+    with pytest.raises(OSError) as error:
+        serveModule.bindServer(gameRoot, "Tidewater", "TIDEWATER", "0.0.0.0", 80)
+    message = str(error.value)
+    assert "http://0.0.0.0:80/" in message
+    assert "not allowed to use that port" in message
+    assert "TIDEWATER_WEB_PORT" in message and "TIDEWATER_WEB_HOST" in message
+    assert error.value.__cause__.errno == errno.EACCES
+
+
+def test_any_other_bind_failure_keeps_the_systems_reason(gameRoot, monkeypatch):
+    refuseToBind(monkeypatch, errno.EADDRNOTAVAIL, "Cannot assign requested address")
+    with pytest.raises(OSError) as error:
+        serveModule.bindServer(gameRoot, "Tidewater", "TIDEWATER", "10.9.9.9", 8080)
+    message = str(error.value)
+    assert "Cannot assign requested address" in message
+    assert "TIDEWATER_WEB_HOST" in message
+
+
+class FakeServer:
+    def __init__(self):
+        self.served = False
+
+    def serve_forever(self):
+        self.served = True
+
+
+def recordBinds(monkeypatch):
+    fake = FakeServer()
+    binds = []
+
+    def _bind(root, title, envPrefix, host, port):
+        binds.append((root, title, envPrefix, host, port))
+        return fake
+
+    monkeypatch.setattr(serveModule, "bindServer", _bind)
+    return fake, binds
+
+
+def test_main_serves_on_the_documented_default_address(monkeypatch, capsys):
+    monkeypatch.delenv("TIDEWATER_WEB_HOST", raising=False)
+    monkeypatch.delenv("TIDEWATER_WEB_PORT", raising=False)
+    fake, binds = recordBinds(monkeypatch)
+    serveModule.main("/game", title="Tidewater", envPrefix="TIDEWATER")
+    assert binds == [("/game", "Tidewater", "TIDEWATER", "127.0.0.1", 8080)]
+    assert fake.served
+    out = capsys.readouterr().out
+    assert "Tidewater is being served at http://127.0.0.1:8080/" in out
+
+
+def test_main_takes_host_and_port_from_the_prefixed_variables(monkeypatch, capsys):
+    monkeypatch.setenv("TIDEWATER_WEB_HOST", "0.0.0.0")
+    monkeypatch.setenv("TIDEWATER_WEB_PORT", "9090")
+    monkeypatch.setenv("TAK_WEB_PORT", "1")
+    fake, binds = recordBinds(monkeypatch)
+    serveModule.main("/game", title="Tidewater", envPrefix="TIDEWATER")
+    assert binds[0][3:] == ("0.0.0.0", 9090)
+    assert "http://0.0.0.0:9090/" in capsys.readouterr().out
+
+
+def test_main_announces_nothing_when_the_address_cannot_be_bound(monkeypatch, capsys):
+    monkeypatch.delenv("TIDEWATER_WEB_PORT", raising=False)
+
+    def _refuse(*args):
+        raise OSError("Tidewater could not be served")
+
+    monkeypatch.setattr(serveModule, "bindServer", _refuse)
+    with pytest.raises(OSError):
+        serveModule.main("/game", title="Tidewater", envPrefix="TIDEWATER")
+    assert capsys.readouterr().out == ""
+
+
+def test_main_rejects_a_misspelled_port_before_binding(monkeypatch, capsys):
+    monkeypatch.setenv("TIDEWATER_WEB_PORT", "eighty")
+    fake, binds = recordBinds(monkeypatch)
+    with pytest.raises(ValueError) as error:
+        serveModule.main("/game", title="Tidewater", envPrefix="TIDEWATER")
+    assert "TIDEWATER_WEB_PORT" in str(error.value)
+    assert binds == [] and capsys.readouterr().out == ""
 
 
 def test_bundle_carries_the_game_and_the_kit(tmp_path, capsys):
