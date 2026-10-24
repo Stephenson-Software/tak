@@ -44,6 +44,7 @@ ui.cleanup()
 | `showBusy(message, seconds)` | A pause with a message, no input. |
 | `timedKeyPress(message)` | Seconds until the player reacts. |
 | `showInteractiveDialogue(npc)` | A conversation menu built from an `NPC`'s options. |
+| `setPicture(key, alt)` | Optional and sticky: shows `pictures/<key>.png` above every following screen in the browser front-ends until the next call (`None` clears it). `alt` is required. The console shows nothing. |
 
 The `header` callable is the game's status line, read fresh before every menu. Its `title` is the browser tab's title (the console ignores it); the page heading is the `title` given to `createUserInterface`. The kit knows nothing about days or money — chips are whatever the game says, and an optional `class` on a chip (`{"text": "Energy: 4/10", "class": "low"}`) lets the browser style it. The console prints the chips on one line, separated by ` | `, and starts a new line between two chips only when the terminal is too narrow for the next one.
 
@@ -144,6 +145,11 @@ Every `TakBoot.start` key is optional. The defaults fit the layout above:
 | `workerUrl` | `"/tak/game-worker.js"` | Where the Worker script is served. |
 | `savesUrl`, `cloudUrl`, `arcadeUrl` | `"/tak/saves.js"`, `"/tak/cloud.js"`, `"/tak/arcade.js"` | Where the save-transfer, cloud-save and arcade scripts are served (see the sections below). |
 | `cloudSaves` | `false` | Set `true` to turn on cloud saves on arcade. |
+| `picturesDir` | `"pictures"` | Where, inside the bundle, the PNGs named by `setPicture` are. |
+
+### Pictures
+
+A game may show one picture per place with `ui.setPicture("strip", "The airstrip under snow.")` when the player enters it. Only the key travels with each screen. In the `PYODIDE` build the Worker reads `<picturesDir>/<key>.png` from the unpacked bundle and sends its bytes to the page the first time the key appears, and the page keeps a `blob:` URL for the rest of the session. The `WEB` front-end serves the same file at `GET /picture/<key>` from its `picturesDir` (default `pictures`, relative to where the game is run). Keys are lower-case letters, digits, `-` and `_`, so a request cannot name a file outside that directory. To ship the pictures, add the directory to the bundle: `build(ROOT, sourceDirectories=("src", "schemas", "pictures"), ...)`.
 
 ## Running an existing console game in the browser
 

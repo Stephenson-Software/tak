@@ -13,10 +13,40 @@
 // A host wires itself up with TakClient.init(sendFn) and then calls
 // TakClient.render(screen) for each screen the game publishes. The screen
 // JSON contract is BaseUserInterface's primitives - see WebUserInterface.
+//
+// Pictures (BaseUserInterface.setPicture): a screen may carry
+// picture: {key, alt}. Only the key travels with the screen. Under Pyodide the
+// Worker sends each picture's bytes once (TakClient.addPicture) and this file
+// keeps a blob: URL for it; a key it has no bytes for is not drawn. The
+// server-backed page instead passes {pictureUrl: (key) => "/picture/" + key}
+// to init, and the browser's own cache keeps the file.
 
 window.TakClient = (function () {
   let currentScreen = null;
   let sendToGame = () => {};
+  let pictureUrl = null;       // (key) => URL, for a host that serves pictures
+  const pictureBlobs = {};     // key -> blob: URL, for bytes handed to addPicture
+
+  function addPicture(key, bytes) {
+    if (pictureBlobs[key]) return;
+    pictureBlobs[key] = URL.createObjectURL(new Blob([bytes], { type: "image/png" }));
+  }
+
+  function pictureSource(key) {
+    if (pictureBlobs[key]) return pictureBlobs[key];
+    return pictureUrl ? pictureUrl(key) : null;
+  }
+
+  // Sized by the stylesheet to the column; width/height give the browser the
+  // aspect ratio before the image has loaded, so the menu does not jump.
+  function renderPicture(picture) {
+    const src = pictureSource(picture.key);
+    if (!src) return null;
+    return el("img", {
+      className: "picture", src: src, alt: picture.alt || "",
+      width: 640, height: 360, decoding: "async",
+    });
+  }
 
   function app() {
     return document.getElementById("app");
@@ -76,6 +106,10 @@ window.TakClient = (function () {
     if (!screen || screen.type === "loading") { renderNotice("Waiting for the game…"); return; }
     if (screen.type === "ended") { renderNotice("The game has ended. You can close this tab."); return; }
     if (screen.header) a.append(renderHeader(screen.header));
+    if (screen.picture) {
+      const img = renderPicture(screen.picture);
+      if (img) a.append(img);
+    }
     if (screen.descriptor) a.append(el("div", { className: "descriptor", textContent: screen.descriptor }));
     if (screen.prompt) a.append(el("div", { className: "prompt", textContent: screen.prompt }));
     if (screen.type === "options") {
@@ -152,14 +186,16 @@ window.TakClient = (function () {
     }
   }
 
-  function init(sendFn) {
+  function init(sendFn, options) {
     sendToGame = sendFn;
+    pictureUrl = (options && options.pictureUrl) || null;
     document.addEventListener("keydown", onKeyDown);
   }
 
   return {
     init: init,
     render: render,
+    addPicture: addPicture,
     renderNotice: renderNotice,
     renderDisconnected: renderDisconnected,
     getCurrentScreen: () => currentScreen,

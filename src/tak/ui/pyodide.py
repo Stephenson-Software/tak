@@ -80,6 +80,20 @@ class SharedArrayBufferBridge:
         """
         self._js.sendToMain(json.dumps({"type": "screen", "screen": screen}))
 
+    def postPicture(self, key):
+        """Have the Worker send the picture ``key``'s bytes to the main thread.
+
+        The Worker reads the file from the unpacked game (it knows the
+        pictures directory from TakBoot.start's config) and transfers the
+        bytes once; screens then name the key only. Returns False, and the
+        game plays on without the picture, when the Worker predates pictures
+        and installs no ``sendPicture``."""
+        sendPicture = getattr(self._js, "sendPicture", None)
+        if sendPicture is None:
+            return False
+        sendPicture(key)
+        return True
+
     def readInput(self):
         """Return the player's next response, or None if none has arrived yet."""
         line = self._readLine()
@@ -139,12 +153,21 @@ class PyodideUserInterface(WebUserInterface):
         super().__init__(currentPrompt, header, title=title, **webKwargs)
         self._bridge = bridge if bridge is not None else SharedArrayBufferBridge()
         self._pollIntervalSeconds = pollIntervalSeconds
+        # Picture keys whose bytes have already crossed to the main thread.
+        self._picturesSent = set()
 
     def _present(self, screen):
         # Record it the way WebUserInterface does (version bookkeeping, and so a
         # late-attaching reader can still ask for the current screen), then push
         # it to the browser instead of waiting to be polled for it.
         super()._present(screen)
+        screen = self.get_state()["screen"]  # as recorded: with its picture
+        picture = screen.get("picture")
+        if picture is not None and picture["key"] not in self._picturesSent:
+            # Before the screen that names it, so the page already has the
+            # bytes when it draws that screen (messages arrive in order).
+            self._bridge.postPicture(picture["key"])
+            self._picturesSent.add(picture["key"])
         self._bridge.postScreen(screen)
 
     def _awaitInput(self):
