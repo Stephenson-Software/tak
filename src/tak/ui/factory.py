@@ -1,6 +1,6 @@
 from tak.ui.uitype import UIType
 from tak.ui.console import ConsoleUserInterface
-from tak.ui.web import DEFAULT_ENV_PREFIX, DEFAULT_TIP
+from tak.ui.web import DEFAULT_ENV_PREFIX, DEFAULT_PICTURES_DIR, DEFAULT_TIP
 
 
 # @author Daniel McCoy Stephenson
@@ -14,6 +14,7 @@ def createUserInterface(
     envPrefix=DEFAULT_ENV_PREFIX,
     host=None,
     port=None,
+    picturesDir=DEFAULT_PICTURES_DIR,
 ):
     """Create the requested front-end behind the BaseUserInterface contract.
 
@@ -21,7 +22,11 @@ def createUserInterface(
     heading and the hint under it); envPrefix names the <PREFIX>_WEB_HOST and
     <PREFIX>_WEB_PORT variables the server-backed front-end reads when host and
     port are not given outright. Heavy or browser-only front-ends are imported
-    lazily inside their branch so the console has no extra dependencies."""
+    lazily inside their branch so the console has no extra dependencies.
+
+    picturesDir is where the server-backed front-end finds the pictures named
+    by setPicture (the console shows none; the Pyodide build reads them from
+    the bundle - see TakBoot.start's picturesDir)."""
     if uiType == UIType.CONSOLE:
         return ConsoleUserInterface(currentPrompt, header)
     elif uiType == UIType.WEB:
@@ -41,6 +46,7 @@ def createUserInterface(
             envPrefix=envPrefix,
             host=host,
             port=port,
+            picturesDir=picturesDir,
         )
     elif uiType == UIType.PYODIDE:
         # Imported lazily like the others: it reaches for the browser-only

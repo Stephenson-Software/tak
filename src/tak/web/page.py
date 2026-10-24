@@ -69,7 +69,7 @@ def htmlPage(title, tagline="", tip=DEFAULT_TIP):
 // everything above.)
 TakClient.init(function (value) {
   fetch("/input", { method: "POST", body: JSON.stringify({ value: value }) });
-});
+}, { pictureUrl: function (key) { return "/picture/" + encodeURIComponent(key); } });
 let version = -1;
 let failures = 0;
 async function poll() {

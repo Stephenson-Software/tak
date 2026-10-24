@@ -6,7 +6,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from tak.ui.base import BaseUserInterface
+from tak.ui.base import PICTURE_KEY_PATTERN, BaseUserInterface
 
 
 # How long cleanup() gives the browser to collect the ended screen before it
@@ -41,6 +41,11 @@ from tak.web.page import (  # noqa: F401,E402 - re-exported
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
 DEFAULT_ENV_PREFIX = "TAK"
+
+# Where a game's pictures live, relative to the directory it is run from (the
+# same place its schemas/ are read from). See BaseUserInterface.setPicture.
+DEFAULT_PICTURES_DIR = "pictures"
+PICTURE_ROUTE = "/picture/"
 
 
 def resolveAddressFromEnvironment(envPrefix=DEFAULT_ENV_PREFIX):
@@ -98,6 +103,15 @@ def _makeRequestHandler(ui):
         def do_GET(self):
             if self.path in ("/", "/index.html"):
                 self._send(200, "text/html; charset=utf-8", ui.page().encode("utf-8"))
+            elif self.path.startswith(PICTURE_ROUTE):
+                body = ui.pictureBytes(self.path[len(PICTURE_ROUTE) :])
+                if body is None:
+                    self._send(404, "text/plain", b"Not found")
+                else:
+                    # A still never changes during a run; let the browser keep
+                    # it, so a location's picture is fetched once, not once
+                    # per screen drawn there.
+                    self._send(200, "image/png", body, cacheSeconds=3600)
             elif self.path.startswith("/state"):
                 state = ui.get_state()
                 self._send(200, "application/json", json.dumps(state).encode("utf-8"))
@@ -121,10 +135,12 @@ def _makeRequestHandler(ui):
             else:
                 self._send(404, "text/plain", b"Not found")
 
-        def _send(self, status, contentType, body):
+        def _send(self, status, contentType, body, cacheSeconds=None):
             self.send_response(status)
             self.send_header("Content-Type", contentType)
             self.send_header("Content-Length", str(len(body)))
+            if cacheSeconds is not None:
+                self.send_header("Cache-Control", "max-age=%d" % cacheSeconds)
             self.end_headers()
             self.wfile.write(body)
 
@@ -141,8 +157,13 @@ class WebUserInterface(BaseUserInterface):
     The synchronous game loop is unchanged: each input primitive publishes the
     current screen and blocks until the browser submits a response, coordinated
     through a thread-safe rendezvous. A small stdlib HTTP server (run in a daemon
-    thread) serves the screen state (GET /state) and the page (GET /), and
-    accepts the player's response (POST /input)."""
+    thread) serves the screen state (GET /state), the page (GET /) and the
+    game's pictures (GET /picture/<key>), and accepts the player's response
+    (POST /input).
+
+    A picture set with setPicture rides on every screen as a ``picture``
+    field ({"key", "alt"}) - the key only, never the image: the browser
+    fetches /picture/<key> once and keeps it."""
 
     def __init__(
         self,
@@ -156,8 +177,10 @@ class WebUserInterface(BaseUserInterface):
         port=DEFAULT_PORT,
         start_server=True,
         endedScreenTimeoutSeconds=ENDED_SCREEN_DELIVERY_TIMEOUT_SECONDS,
+        picturesDir=DEFAULT_PICTURES_DIR,
     ):
         super().__init__(currentPrompt, header)
+        self.picturesDir = picturesDir
         self.title = title
         self.tagline = tagline
         self.tip = tip
@@ -239,12 +262,37 @@ class WebUserInterface(BaseUserInterface):
                 return False
             time.sleep(ENDED_SCREEN_DELIVERY_POLL_SECONDS)
 
+    def pictureBytes(self, key):
+        """The PNG for a picture key, or None if there is no such picture.
+
+        The key is checked against the same pattern setPicture enforces before
+        it is joined to the pictures directory, so a request can only ever
+        name a file directly inside it."""
+        if not PICTURE_KEY_PATTERN.match(key or ""):
+            return None
+        path = os.path.join(self.picturesDir, key + ".png")
+        try:
+            with open(path, "rb") as f:
+                return f.read()
+        except OSError:
+            return None
+
+    def _withPicture(self, screen):
+        """The screen, carrying the current picture if one is set.
+
+        Not added to the ended screen: there is nothing left to illustrate."""
+        picture = self.picture()
+        if picture is None or screen.get("type") == "ended":
+            return screen
+        return dict(screen, picture=picture)
+
     # --- transport seams ---------------------------------------------------
     # Every screen below is built once and shared by both web front-ends; only
     # how a screen reaches the browser (_present) and how the response comes
     # back (_awaitInput) differ. PyodideUserInterface overrides just these two,
     # so a new screen type never has to be written twice.
     def _present(self, screen):
+        screen = self._withPicture(screen)
         with self._lock:
             self._screen = screen
             self._version += 1

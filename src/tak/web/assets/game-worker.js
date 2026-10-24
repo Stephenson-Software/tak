@@ -217,6 +217,21 @@ self.onmessage = async (e) => {
     globalThis.sabData     = new Uint8Array(sab, 8, ringSize);
     globalThis.sabRingSize = ringSize;
     globalThis.sendToMain  = (data) => self.postMessage(data);
+    // A location's picture (BaseUserInterface.setPicture): tak.ui.pyodide
+    // calls this the first time a key appears, before the screen naming it.
+    // The PNG is read from the unpacked bundle and its bytes are transferred,
+    // not copied, to the page, which keeps a blob: URL for the rest of the
+    // session - so a picture crosses once, and screens carry only its key.
+    // A missing file is logged and skipped; the game plays on without it.
+    const picturesDir = String(config.picturesDir || 'pictures').replace(/^\/+|\/+$/g, '');
+    globalThis.sendPicture = (key) => {
+        key = String(key);
+        if (!/^[a-z0-9_-]+$/.test(key) || !globalThis.takPyodide) return;
+        let bytes;
+        try { bytes = globalThis.takPyodide.FS.readFile(`/game/${picturesDir}/${key}.png`); }
+        catch (err) { console.warn(log, `no picture '${key}' in ${picturesDir}/:`, err); return; }
+        self.postMessage({ type: 'picture', key, bytes }, [bytes.buffer]);
+    };
     // tak.arcade's scores and unlocks (RFC 0014). Posted to the page, which
     // makes the request from the main thread with the player's cookie: this
     // Worker is blocked by Python whenever the game runs, so it could never
@@ -234,6 +249,7 @@ self.onmessage = async (e) => {
             stdout: (msg) => console.log(log, msg),
             stderr: (msg) => console.warn(log, msg),
         });
+        globalThis.takPyodide = pyodide;   // for sendPicture
 
         self.postMessage({ type: 'status', msg: messages.restore });
 

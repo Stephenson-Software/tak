@@ -1,3 +1,4 @@
+import re
 import time
 from abc import ABC, abstractmethod
 
@@ -18,6 +19,12 @@ def unavailableMessage(reason):
     Names the blocker and what to do about it rather than a bare "try again",
     which would read as though they had mistyped."""
     return "You can't do that right now: %s." % reason
+
+
+# A picture key names a file in the game's pictures directory (without its
+# extension), and the server-backed front-end serves it at /picture/<key>, so
+# it is held to characters that can never climb out of that directory.
+PICTURE_KEY_PATTERN = re.compile(r"^[a-z0-9_-]+$")
 
 
 def _emptyHeader():
@@ -61,6 +68,7 @@ class BaseUserInterface(ABC):
     def __init__(self, currentPrompt: Prompt, header=None):
         self.currentPrompt = currentPrompt
         self._headerProvider = header
+        self._picture = None
         self.optionList = []
 
     def header(self):
@@ -68,6 +76,40 @@ class BaseUserInterface(ABC):
         if self._headerProvider is None:
             return _emptyHeader()
         return normalizeHeader(self._headerProvider())
+
+    def setPicture(self, key, alt=None):
+        """Show the picture ``key`` above every following screen, until the next call.
+
+        ``key`` is a file name under the game's pictures directory, without
+        its extension (``"strip"`` for ``pictures/strip.png``); ``None``
+        clears the picture. ``alt`` - the words a screen reader says instead
+        of the picture - is required whenever ``key`` is not ``None``.
+
+        Sticky rather than an argument to showOptions: a location's menu, its
+        dialogues and its prompts are many screens, and a scene sets its
+        picture once when it is entered. Concrete, not abstract: a front-end
+        that cannot draw a picture (the console) simply shows none, so a game
+        that calls this still plays as text everywhere."""
+        if key is None:
+            self._picture = None
+            return
+        if not isinstance(key, str) or not PICTURE_KEY_PATTERN.match(key):
+            raise ValueError(
+                "setPicture was given the key %r. A picture key is the file's "
+                "name under the pictures directory without its extension, in "
+                "lower-case letters, digits, '-' and '_' only (e.g. 'strip' for "
+                "pictures/strip.png)." % (key,)
+            )
+        if not isinstance(alt, str) or not alt.strip():
+            raise ValueError(
+                "setPicture(%r) needs alt text: a sentence describing the "
+                "picture for players who cannot see it." % key
+            )
+        self._picture = {"key": key, "alt": alt}
+
+    def picture(self):
+        """The current picture as {"key", "alt"}, or None - see setPicture."""
+        return None if self._picture is None else dict(self._picture)
 
     @abstractmethod
     def lotsOfSpace(self):

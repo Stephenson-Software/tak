@@ -8,6 +8,8 @@
 //     entry: 'web/pyodide_main.py', // inside the bundle
 //     messages: { download: 'Downloading the village…' },  // optional
 //     statusElementId: 'status',    // optional; where boot progress is shown
+//     picturesDir: 'pictures',      // optional; inside the bundle, where the
+//                                   // game's setPicture PNGs are (default 'pictures')
 //   });
 //
 // It also puts a "Saves" control under the game (saves.js, loaded from
@@ -245,6 +247,7 @@ window.TakBoot = (function () {
         }
         if (message.type === "status") { setStatus(message.msg); return; }
         if (message.type === "ready")  { return; }
+        if (message.type === "picture") { TakClient.addPicture(message.key, message.bytes); return; }
         if (message.type === "save")   { idbWrite(message.files, message.deleted); return; }
         if (message.type === "arcade") { arcade(message.request); return; }
         if (message.type === "nosave") {
@@ -284,6 +287,7 @@ window.TakBoot = (function () {
           packages: config.packages || [],
           pyodideUrl: config.pyodideUrl,
           messages: config.messages || {},
+          picturesDir: config.picturesDir || "pictures",
           logPrefix: log,
         },
       });
