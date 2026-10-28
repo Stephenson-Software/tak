@@ -8,7 +8,9 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pinned rather than ubuntu-latest: setup-python publishes no 3.8 build for
+    # Ubuntu 26.04, so the 3.8 job fails at "Set up Python" once latest moves there.
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         # 3.8 is the oldest interpreter a game on the kit is played from (an
