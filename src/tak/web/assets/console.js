@@ -12,7 +12,8 @@
 //
 // Under the terminal goes a "Saves" control (saves.js, loaded from
 // config.savesUrl, default /tak/saves.js): download the kept files as one
-// save file, and load them from one.
+// save file, and load them from one. On arcade, a top-level page also gets a
+// small "← Arcade" link back to the hall (hall.js, config.hallUrl).
 //
 // The terminal is a scrolling output pane and one real text field. A real
 // <input> (rather than key events on a canvas) is what makes a phone's
@@ -38,6 +39,7 @@ window.TakConsole = (function () {
   function start(config) {
     config = config || {};
     const log = config.logPrefix || "[tak-console]";
+    loadHallLink(config.hallUrl || "/tak/hall.js");
     const host = document.getElementById(config.elementId || "console") || document.body;
 
     const root = element("div", "tak-console");
@@ -265,6 +267,21 @@ window.TakConsole = (function () {
     }
   }
 
+
+  // The "← Arcade" link back to the hall (hall.js). Fetched only for a
+  // top-level page on a danielstephenson.dev host; hall.js decides the rest
+  // (which hosts are games on arcade) and draws nothing anywhere else.
+  function loadHallLink(url) {
+    try {
+      if (window.top !== window.self) return;
+      if (!/(^|\.)danielstephenson\.dev$/.test(location.hostname)) return;
+    } catch (e) { return; }
+    if (window.TakHall) { window.TakHall.attach(window); return; }
+    const script = document.createElement("script");
+    script.src = url;
+    script.onload = () => { if (window.TakHall) window.TakHall.attach(window); };
+    document.head.appendChild(script);
+  }
 
   function loadSaveTransfer(url, ready, log) {
     if (window.TakSaves) { ready(); return; }

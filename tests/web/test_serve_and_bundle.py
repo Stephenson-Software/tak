@@ -27,6 +27,7 @@ REQUIRED_ASSETS = (
     "saves.js",
     "arcade.js",
     "cloud.js",
+    "hall.js",
 )
 
 

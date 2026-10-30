@@ -143,7 +143,7 @@ Every `TakBoot.start` key is optional. The defaults fit the layout above:
 | `statusElementId` | `"status"` | The element boot progress and errors are shown in. |
 | `logPrefix` | `"[tak]"` | Prefix on the lines the game's output and the kit write to the browser console. |
 | `workerUrl` | `"/tak/game-worker.js"` | Where the Worker script is served. |
-| `savesUrl`, `cloudUrl`, `arcadeUrl` | `"/tak/saves.js"`, `"/tak/cloud.js"`, `"/tak/arcade.js"` | Where the save-transfer, cloud-save and arcade scripts are served (see the sections below). |
+| `savesUrl`, `cloudUrl`, `arcadeUrl`, `hallUrl` | `"/tak/saves.js"`, `"/tak/cloud.js"`, `"/tak/arcade.js"`, `"/tak/hall.js"` | Where the save-transfer, cloud-save, arcade and back-to-the-hall scripts are served (see the sections below). |
 | `cloudSaves` | `false` | Set `true` to turn on cloud saves on arcade. |
 | `picturesDir` | `"pictures"` | Where, inside the bundle, the PNGs named by `setPicture` are. |
 
@@ -303,6 +303,26 @@ arcade.unlock("first-catch")                       # idempotent; never raises
   no-ops there. Set `arcadeUrl` in `TakBoot.start` if `arcade.js` is served somewhere other than
   `/tak/arcade.js`.
 
+## Back to the arcade hall
+
+On arcade, both runtimes (`TakBoot.start` and `TakConsole.start`) put a small **← Arcade** link at
+the top of the page, above the title. It goes to the game's own cabinet in the walkable hall,
+`https://play.danielstephenson.dev/hall/?at=<slug>`, where `<slug>` is the first label of
+`<slug>.play.danielstephenson.dev`. The old alias hosts `tidewater.`, `overwinter.` and
+`fishe.danielstephenson.dev` link to their games' cabinets too.
+
+<img src="docs/images/tak-hall-link.png" alt="Tidewater on arcade with a small '← Arcade' link above the title" width="480"> <img src="docs/images/tak-hall-link-phone.png" alt="The same page on a phone: the link sits above the title, clear of the options" width="195">
+
+- **Nowhere else.** Not on `localhost`, `tak.web.serve`, or any other host, and not when the page is
+  framed (the hall's overlay and `danielstephenson.dev/play/<id>/play` have their own way back).
+  `hall.js` is not even fetched off `danielstephenson.dev` or inside a frame.
+- **A plain link.** A full page load, in the page's flow (never over the game's text or controls).
+  It reads and writes no storage and sends no request; the game's saves stay in the browser as
+  always and load as before when the player comes back. Enter on the focused link follows it rather
+  than also continuing a dialogue.
+- `hallUrl` in the start config overrides where `hall.js` is served from. The host logic is tested
+  under Node by `tests/web/test_hall_js.py`.
+
 ## Development
 
 ```bash
@@ -313,7 +333,7 @@ pip install -e '.[dev]'
 
 ## How the screenshots were captured
 
-`docs/images/tak-console.gif` was recorded on 2026-10-18 from a real run of `python3 examples/minimal_game.py` (Python 3.12, tak installed with `pip install -e .`), with the menu choices typed by a script. The recorded terminal output was rendered to an image with [pyte](https://github.com/selectel/pyte) and [Pillow](https://python-pillow.org/); nothing in it was edited, only the window frame was added. Pauses longer than 2.2 seconds were shortened in the GIF. `docs/images/tak-web.png` and `docs/images/tak-web-phone.png` are headless-Chromium screenshots of `python3 examples/minimal_game.py --web` at 1100 px and 390 px wide, cropped to the game.
+`docs/images/tak-console.gif` was recorded on 2026-10-18 from a real run of `python3 examples/minimal_game.py` (Python 3.12, tak installed with `pip install -e .`), with the menu choices typed by a script. The recorded terminal output was rendered to an image with [pyte](https://github.com/selectel/pyte) and [Pillow](https://python-pillow.org/); nothing in it was edited, only the window frame was added. Pauses longer than 2.2 seconds were shortened in the GIF. `docs/images/tak-web.png` and `docs/images/tak-web-phone.png` are headless-Chromium screenshots of `python3 examples/minimal_game.py --web` at 1100 px and 390 px wide, cropped to the game. `docs/images/tak-hall-link.png` and `docs/images/tak-hall-link-phone.png` (2026-10-29) are headless-Chromium screenshots of the live Tidewater page at 1280 px and in Playwright's iPhone 13 profile, with this branch's `boot.js` and `hall.js` served in place of the deployed ones, cropped to the top of the page.
 
 ## License
 This project is licensed under the **Stephenson Software Non-Commercial License (Stephenson-NC)**.  

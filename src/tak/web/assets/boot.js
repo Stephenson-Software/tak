@@ -18,7 +18,8 @@
 // (config.cloudUrl, default /tak/cloud.js) adds cloud backup to that control
 // (RFC 0016); see the cloud section below. A game's tak.arcade scores and unlocks are sent on by
 // arcade.js (config.arcadeUrl, default /tak/arcade.js), loaded only when the
-// game first reports one.
+// game first reports one. On arcade, a top-level page also gets a small
+// "← Arcade" link back to the hall (hall.js, config.hallUrl).
 //
 // Everything below is game-agnostic: the SharedArrayBuffer ring the player's
 // input travels over, the IndexedDB mirror of the save directory, and the
@@ -32,6 +33,7 @@ window.TakBoot = (function () {
   function start(config) {
     config = config || {};
     const log = config.logPrefix || "[tak]";
+    loadHallLink(config.hallUrl || "/tak/hall.js");
     const statusEl = document.getElementById(config.statusElementId || "status");
 
     function setStatus(msg, isError) {
@@ -337,6 +339,21 @@ window.TakBoot = (function () {
   // saves.js is shared with the console runtime and fetched on demand, so a
   // game's index.html does not have to list it. If it cannot be loaded the
   // game runs exactly as before, just without the Saves control.
+  // The "← Arcade" link back to the hall (hall.js). Fetched only for a
+  // top-level page on a danielstephenson.dev host; hall.js decides the rest
+  // (which hosts are games on arcade) and draws nothing anywhere else.
+  function loadHallLink(url) {
+    try {
+      if (window.top !== window.self) return;
+      if (!/(^|\.)danielstephenson\.dev$/.test(location.hostname)) return;
+    } catch (e) { return; }
+    if (window.TakHall) { window.TakHall.attach(window); return; }
+    const script = document.createElement("script");
+    script.src = url;
+    script.onload = () => { if (window.TakHall) window.TakHall.attach(window); };
+    document.head.appendChild(script);
+  }
+
   function loadSaveTransfer(url, ready, log, failed) {
     if (window.TakSaves) { ready(); return; }
     const script = document.createElement("script");
