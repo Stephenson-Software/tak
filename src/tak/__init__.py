@@ -5,7 +5,8 @@ One user-interface contract (tak.ui.BaseUserInterface) with three front-ends
 behind it - console, server-backed web, and in-browser under Pyodide - plus
 the pieces a menu-driven text game needs around it: numbered save slots with
 JSON Schema validation, a progressive-disclosure unlock engine, NPC dialogue,
-and the clock formatting a day-based game shows in its header.
+the clock formatting a day-based game shows in its header, and score and
+achievement reporting for a game played on arcade (tak.arcade).
 
 Extracted from FishE (https://github.com/Stephenson-Software/FishE); Tidewater
 is the first game built on it; FishE is being moved onto it.
