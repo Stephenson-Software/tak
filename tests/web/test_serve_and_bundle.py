@@ -31,6 +31,13 @@ REQUIRED_ASSETS = (
 )
 
 
+def test_the_tak_web_docstring_names_every_shipped_asset():
+    import tak.web
+
+    for name in sorted(os.listdir(ASSET_DIRECTORY)):
+        assert name in tak.web.__doc__, name
+
+
 def test_the_kit_ships_its_browser_assets():
     for name in REQUIRED_ASSETS:
         assert os.path.exists(os.path.join(ASSET_DIRECTORY, name)), name
