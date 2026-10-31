@@ -164,6 +164,47 @@ def test_an_empty_slot_directory_is_free(tmp_path):
     assert manager(root).get_next_available_slot() == 1
 
 
+def test_a_slot_directory_that_cannot_be_walked_is_not_handed_out(
+    tmp_path, monkeypatch
+):
+    # slot_1 is empty, so it would be free if it could be read. It cannot:
+    # unknown is never "empty", so the new run goes to slot 2.
+    root = str(tmp_path)
+    blocked = os.path.join(root, "slot_1")
+    os.makedirs(blocked)
+    realScandir = os.scandir
+
+    def scandir(path="."):
+        if os.path.abspath(path) == os.path.abspath(blocked):
+            raise PermissionError("cannot read %s" % path)
+        return realScandir(path)
+
+    monkeypatch.setattr(managerModule.os, "scandir", scandir)
+    m = manager(root)
+    assert m.list_save_files() == []
+    assert m.get_next_available_slot() == 2
+    ui = ScriptedUI(["1"])
+    assert chooseSlot(ui, m, "T", describe) == ("new", 2)
+
+
+def test_a_file_named_like_a_slot_claims_that_slot(tmp_path):
+    root = str(tmp_path)
+    with open(os.path.join(root, "slot_1"), "w") as f:
+        f.write("not a directory")
+    assert manager(root).get_next_available_slot() == 2
+
+
+def test_entries_that_are_not_slots_claim_nothing(tmp_path):
+    root = str(tmp_path)
+    for name in ("slot_", "slot_abc", "slot_0", "slot_-1", "slot_100", "backup"):
+        os.makedirs(os.path.join(root, name))
+        with open(os.path.join(root, name, "save.json"), "w") as f:
+            f.write('{"loop": 1}')
+    with open(os.path.join(root, "notes.txt"), "w") as f:
+        f.write("stray file")
+    assert manager(root).get_next_available_slot() == 1
+
+
 def test_one_unreadable_slot_does_not_hide_the_others(tmp_path):
     root = str(tmp_path)
     writeSlot(root, 1)
