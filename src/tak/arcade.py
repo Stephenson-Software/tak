@@ -35,14 +35,16 @@ import re
 
 from tak.saves.browser import getJsModule
 
-# Board and achievement ids, as arcade-social declares them.
+# Board and achievement ids, as arcade-social declares them. These two read the
+# same as arcade.js's. Apply them with fullmatch: Python's $ also matches before
+# a final newline, which JavaScript's does not.
 ID_PATTERN = re.compile(r"^[a-z][a-z0-9-]{1,30}$")
 # An optional opaque tag for a run, stored only in the service's log.
 RUN_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
 
 
 def _isId(value):
-    return isinstance(value, str) and ID_PATTERN.match(value) is not None
+    return isinstance(value, str) and ID_PATTERN.fullmatch(value) is not None
 
 
 def _isFiniteNumber(value):
@@ -83,7 +85,7 @@ def submitScore(board, value, run=None):
             return None
         request = {"kind": "score", "board": board, "value": value}
         if run is not None:
-            if not isinstance(run, str) or RUN_PATTERN.match(run) is None:
+            if not isinstance(run, str) or RUN_PATTERN.fullmatch(run) is None:
                 return None
             request["run"] = run
         _post(request)

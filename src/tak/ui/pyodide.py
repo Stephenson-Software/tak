@@ -105,7 +105,7 @@ class SharedArrayBufferBridge:
             # Not something this front-end sent; ignoring it keeps a stray
             # write from ending the wait with a bogus response.
             return None
-        if message.get("type") != "input":
+        if not isinstance(message, dict) or message.get("type") != "input":
             return None
         return message.get("value", "")
 

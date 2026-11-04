@@ -33,6 +33,15 @@ def test_getJsModule_finds_an_injected_module(fakeJs):
     assert getJsModule() is fakeJs
 
 
+def test_getJsModule_imports_a_module_not_yet_in_sys_modules(
+    noJs, tmp_path, monkeypatch
+):
+    # How it is under Pyodide: importable, but absent until something imports it.
+    (tmp_path / "js.py").write_text("IS_THE_IMPORTED_MODULE = True\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    assert getJsModule().IS_THE_IMPORTED_MODULE is True
+
+
 def test_syncBrowserSaves_is_a_no_op_outside_a_browser(noJs):
     assert syncBrowserSaves() is False
 
