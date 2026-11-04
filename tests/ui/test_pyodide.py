@@ -84,6 +84,14 @@ def test_messages_that_are_not_input_are_ignored(fakeJs):
     assert ui.promptForText("?") == "real"
 
 
+@pytest.mark.parametrize("stray", ["5", "[1]", "null", '"input"'])
+def test_json_that_is_not_an_object_is_ignored(fakeJs, stray):
+    ui = makePyodideUI(fakeJs)
+    fakeJs._writeToRing(stray)
+    fakeJs.writePlayerInput("real")
+    assert ui.promptForText("?") == "real"
+
+
 def test_submit_input_still_works_alongside_the_ring(fakeJs):
     ui = makePyodideUI(fakeJs)
     ui.submit_input("queued")

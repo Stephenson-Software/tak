@@ -74,6 +74,15 @@ def test_malformed_calls_are_ignored_not_raised(fakeJs):
     assert fakeJs.takArcade.requests == []
 
 
+def test_a_trailing_newline_is_malformed_as_it_is_in_arcade_js(fakeJs):
+    # Python's $ also matches before a final newline; JavaScript's does not.
+    fakeJs.takArcade = Recorder()
+    arcade.submitScore("most-money\n", 1)
+    arcade.submitScore("most-money", 1, run="seed-12\n")
+    arcade.unlock("first-catch\n")
+    assert fakeJs.takArcade.requests == []
+
+
 def test_a_failing_page_never_reaches_the_game(fakeJs):
     fakeJs.takArcade = Recorder(fail=True)
     assert arcade.submitScore("most-money", 1) is None
