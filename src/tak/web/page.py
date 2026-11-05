@@ -31,8 +31,7 @@ def htmlPage(title, tagline="", tip=DEFAULT_TIP):
 
     It polls /state and renders whatever screen the game is currently waiting
     on, posting the player's response to /input. The kit's renderer and styles
-    are inlined so the server stays a two-route affair and the page needs a
-    single request."""
+    are inlined so the page needs a single request."""
     taglineHtml = (
         ' <span class="tagline">— %s</span>' % _escape(tagline) if tagline else ""
     )
