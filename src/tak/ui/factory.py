@@ -18,11 +18,13 @@ def createUserInterface(
 ):
     """Create the requested front-end behind the BaseUserInterface contract.
 
-    title/tagline/tip only matter to the browser front-ends (they are the page
-    heading and the hint under it); envPrefix names the <PREFIX>_WEB_HOST and
-    <PREFIX>_WEB_PORT variables the server-backed front-end reads when host and
-    port are not given outright. Heavy or browser-only front-ends are imported
-    lazily inside their branch so the console has no extra dependencies.
+    title/tagline/tip only matter to the server-backed front-end, the one that
+    serves its own page (they are the page heading and the hint below the
+    game); a Pyodide game's page is its own web/index.html. envPrefix names the
+    <PREFIX>_WEB_HOST and <PREFIX>_WEB_PORT variables the server-backed
+    front-end reads when host and port are not given outright. Heavy or
+    browser-only front-ends are imported lazily inside their branch so the
+    console has no extra dependencies.
 
     picturesDir is where the server-backed front-end finds the pictures named
     by setPicture (the console shows none; the Pyodide build reads them from

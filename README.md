@@ -40,13 +40,16 @@ ui.cleanup()
 |---|---|
 | `showOptions(descriptor, options, unavailableOptions=None)` | Numbered menu; returns the chosen number as a string. Unavailable rows are listed but greyed with their reason. |
 | `showDialogue(text)` | A block of text and a Continue. |
-| `promptForText(text)` / `promptForNumber(text)` | Free-text / numeric input. |
+| `promptForText(text)` / `promptForNumber(text)` | Free-text / numeric input. `promptForNumber` returns a float, or `None` if the input was not a number. |
 | `showBusy(message, seconds)` | A pause with a message, no input. |
 | `timedKeyPress(message)` | Seconds until the player reacts. |
 | `showInteractiveDialogue(npc)` | A conversation menu built from an `NPC`'s options. |
 | `setPicture(key, alt)` | Optional and sticky: shows `pictures/<key>.png` above every following screen in the browser front-ends until the next call (`None` clears it). `alt` is required. The console shows nothing. |
+| `picture()` | The current picture as `{"key", "alt"}`, or `None`. |
+| `lotsOfSpace()` / `divider()` | Clear space / draw a separating line in the console. The browser front-ends do nothing. |
+| `cleanup()` | Ends the run; call it last. The browser front-ends show the ended screen, and `WEB` then waits up to 2 seconds for the page to collect it before closing its server. |
 
-The `header` callable is the game's status line, read fresh before every menu. Its `title` is the browser tab's title (the console ignores it); the page heading is the `title` given to `createUserInterface`. The kit knows nothing about days or money — chips are whatever the game says, and an optional `class` on a chip (`{"text": "Energy: 4/10", "class": "low"}`) lets the browser style it. The console prints the chips on one line, separated by ` | `, and starts a new line between two chips only when the terminal is too narrow for the next one.
+The `header` callable is the game's status line, read fresh before every menu. Its `title` is the browser tab's title (the console ignores it); the heading of the `WEB` front-end's page is the `title` given to `createUserInterface`. The kit knows nothing about days or money — chips are whatever the game says, and an optional `class` on a chip (`{"text": "Energy: 4/10", "class": "low"}`) lets the browser style it. The console prints the chips on one line, separated by ` | `, and starts a new line between two chips only when the terminal is too narrow for the next one.
 
 ### Front-ends
 
@@ -62,19 +65,32 @@ The `header` callable is the game's status line, read fresh before every menu. I
 
 *The same example game in the `WEB` front-end (`python3 examples/minimal_game.py --web`).*
 
+`createUserInterface(uiType, currentPrompt, header=None, ...)` takes these keywords as well. All of them apply to `WEB` only, because that is the one front-end that serves its own page: the console has no page, and a `PYODIDE` game's page is its own `web/index.html`.
+
+| Keyword | Default | What it sets |
+|---|---|---|
+| `title` | `"tak"` | The page heading and the name in the line that announces the address. |
+| `tagline` | `""` | Text shown after the title in the heading. |
+| `tip` | the kit's hint about clicking and number keys | The hint on the page. |
+| `envPrefix` | `"TAK"` | The `<PREFIX>` of the `<PREFIX>_WEB_HOST` and `<PREFIX>_WEB_PORT` variables. |
+| `host`, `port` | read from those variables, then `127.0.0.1` and `8000` | The address to serve on. A value given here wins over its variable. |
+| `picturesDir` | `"pictures"` | Where the pictures named by `setPicture` are, relative to where the game is run. |
+
 ### Saves
 
 ```python
 from tak.saves import SaveFileManager, validateAgainstSchema, syncBrowserSaves
 
 saves = SaveFileManager("data", primaryFile="save.json",
-                        readMetadata=lambda slotPath, data: {"loop": data["loop"]})
+                        readMetadata=lambda slotPath, data: {"loop": data.get("loop")})
 slot = saves.get_next_available_slot()
 saves.select_save_slot(slot)
 validateAgainstSchema(state, "schemas/save.json")
 with open(saves.get_save_path("save.json"), "w") as f: json.dump(state, f)
 syncBrowserSaves()   # no-op outside the browser; required after every write under Pyodide
 ```
+
+`readMetadata` must not raise. It receives any save file that parsed to a JSON object, including an old or hand-edited one that lacks a field, and a `KeyError` from it passes straight out of `list_save_files()` and stops the save menu.
 
 `chooseSlot(ui, saves, "Tidewater", describe)` runs the opening menu — load, new, delete, quit — and returns `("load", n)`, `("new", n)` or `None`. A slot whose primary file will not parse stays listed as damaged and stays claimed, so a new game is never pointed at an occupied directory. `get_next_available_slot()` decides "free" from the disk, not from the list: any `slot_N` directory holding a file is taken even if the menu could not show it, and `chooseSlot` refuses to start a new run in a slot that holds files.
 
@@ -97,6 +113,12 @@ tom = NPC("Old Tom", "Keeps the tavern.", [
 ])
 ```
 
+An unlock's `condition` takes the game's state; an NPC option's `condition` takes nothing, and the option stays hidden while it returns false. An option's `response` may also be a zero-argument callable, evaluated when the line is shown, so an answer can reflect the current state. After loading a save, call `progression.catchUp(state, state.unlocked)`: it grants everything already earned at once and announces nothing, where `getNextUnlock` would hand it back one per call. `progression.isUnlocked(state.unlocked, "tavern")` is the test for a menu.
+
+### Clock
+
+`tak.formatHour(hour)` turns an hour from 0 to 23 into a header string (`8` gives `"8:00 AM"`) and raises `ValueError` for anything else.
+
 ## Shipping a browser build
 
 The kit carries the browser side: `client.js`/`client.css` (the renderer both web front-ends share), `boot.js` (SharedArrayBuffer input ring, IndexedDB save mirror, Worker wiring) and `game-worker.js` (loads Pyodide, restores saves, unpacks the bundle, runs the game). A game adds three small files:
@@ -118,7 +140,7 @@ from tak.web.bundle import build;  build(ROOT, extraFiles=("version.txt", "web/p
 from tak.web.serve import main;    main(ROOT, title="Tidewater", envPrefix="TIDEWATER")
 ```
 
-`build` puts the game's `src/` and `schemas/` and the tak package itself into `web/game.zip` (an `extraFiles` entry that does not exist is skipped, with a warning on stderr naming it); `serve` sends the `Cross-Origin-Opener-Policy`/`Cross-Origin-Embedder-Policy` headers SharedArrayBuffer needs and serves the kit's assets at `/tak/`. Any proxy in front of it must preserve those headers.
+`build` puts the game's `src/` and `schemas/` and the tak package itself into `web/game.zip` (an `extraFiles` entry that does not exist is skipped, with a warning on stderr naming it; `sourceDirectories`, `outputPath` and `includeTak=False` change what goes in and where it is written); `serve` sends the `Cross-Origin-Opener-Policy`/`Cross-Origin-Embedder-Policy` headers SharedArrayBuffer needs and serves the kit's assets at `/tak/`. Any proxy in front of it must preserve those headers.
 
 `serve` answers three kinds of path and returns 404 for everything else:
 
@@ -175,7 +197,9 @@ build(ROOT, sourceDirectories=("src",), extraFiles=("version.txt",))
 ```
 
 `entry` is run as `__main__` with its own directory as the working directory. `idbName` must be
-unique per game and must never change once players have saves under it. The page loads
+unique per game and must never change once players have saves under it. `page` also takes
+`tagline`, `footer` (already-safe HTML), `bundleUrl` (default `/web/game.zip`) and `packages`
+(extra Pyodide packages to load). The page loads
 `/tak/console.css`, `/tak/console.js` and `/tak/console-worker.js`, which `tak.web.serve` and
 [arcade](https://github.com/Stephenson-Software/arcade) both serve. Like every tak browser build,
 it must be served cross-origin isolated.
@@ -330,6 +354,8 @@ pip install -e '.[dev]'
 ./test.sh
 ./format.sh
 ```
+
+The tests of the browser scripts run under [Node](https://nodejs.org) and are skipped when `node` is not on the `PATH`. CI has it, so a clean run without it says less than a clean run in CI.
 
 ## How the screenshots were captured
 
