@@ -79,7 +79,9 @@ def test_setPicture_is_sticky_until_cleared(prompt):
     assert ui.picture() is None
 
 
-@pytest.mark.parametrize("key", ["../secret", "Strip", "strip.png", "", "a/b", 7])
+@pytest.mark.parametrize(
+    "key", ["../secret", "Strip", "strip.png", "", "a/b", 7, "strip\n"]
+)
 def test_setPicture_refuses_a_key_that_is_not_a_bare_file_name(prompt, key):
     ui = ConsoleUserInterface(prompt)
     with pytest.raises(ValueError, match="picture key"):
@@ -139,6 +141,13 @@ def test_pictureBytes_reads_only_bare_keys_inside_the_directory(tmp_path):
     assert ui.pictureBytes("missing") is None
     assert ui.pictureBytes("../secret") is None
     assert ui.pictureBytes("%2e%2e/secret") is None
+
+
+def test_pictureBytes_refuses_a_key_with_a_trailing_newline(tmp_path):
+    # The file exists, so only the key check can make this None.
+    (tmp_path / "strip\n.png").write_bytes(PNG)
+    ui = makeWebUI(tmp_path)
+    assert ui.pictureBytes("strip\n") is None
 
 
 def test_server_serves_a_picture_as_png_and_404s_anything_else(tmp_path):

@@ -268,7 +268,7 @@ class WebUserInterface(BaseUserInterface):
         The key is checked against the same pattern setPicture enforces before
         it is joined to the pictures directory, so a request can only ever
         name a file directly inside it."""
-        if not PICTURE_KEY_PATTERN.match(key or ""):
+        if not PICTURE_KEY_PATTERN.fullmatch(key or ""):
             return None
         path = os.path.join(self.picturesDir, key + ".png")
         try:
