@@ -23,7 +23,8 @@ def unavailableMessage(reason):
 
 # A picture key names a file in the game's pictures directory (without its
 # extension), and the server-backed front-end serves it at /picture/<key>, so
-# it is held to characters that can never climb out of that directory.
+# it is held to characters that can never climb out of that directory. Apply it
+# with fullmatch: Python's $ also matches before a final newline.
 PICTURE_KEY_PATTERN = re.compile(r"^[a-z0-9_-]+$")
 
 
@@ -93,7 +94,7 @@ class BaseUserInterface(ABC):
         if key is None:
             self._picture = None
             return
-        if not isinstance(key, str) or not PICTURE_KEY_PATTERN.match(key):
+        if not isinstance(key, str) or not PICTURE_KEY_PATTERN.fullmatch(key):
             raise ValueError(
                 "setPicture was given the key %r. A picture key is the file's "
                 "name under the pictures directory without its extension, in "
