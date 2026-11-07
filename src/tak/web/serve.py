@@ -17,6 +17,9 @@ Routes:
   /tak/...                       -> the kit's assets (client, boot, worker)
   everything else                -> 404
 
+HEAD takes the same routes as GET, and a /web/ path that climbs out of web/
+with ".." is a 404: nothing else under <root> is ever served.
+
 The Cross-Origin-Opener-Policy / Cross-Origin-Embedder-Policy headers below are
 not optional: without them the page is not cross-origin isolated, and
 SharedArrayBuffer - which is how the player's input reaches the blocked game
@@ -52,6 +55,14 @@ def _makeHandler(root, title):
             super().__init__(*args, directory=root, **kwargs)
 
         def do_GET(self):
+            self._route(super().do_GET)
+
+        def do_HEAD(self):
+            # Overridden so HEAD takes the same routes as GET: the inherited
+            # do_HEAD answers for any file under root.
+            self._route(super().do_HEAD)
+
+        def _route(self, sendWebFile):
             path = unquote(urlparse(self.path).path)
             if path in INDEX_PATHS:
                 self._sendIndex()
@@ -59,10 +70,22 @@ def _makeHandler(root, title):
             if path.startswith(ASSET_URL_PREFIX):
                 self._sendAsset(path[len(ASSET_URL_PREFIX) :])
                 return
-            if not path.startswith("/web/"):
+            if not path.startswith("/web/") or not self._staysInWebDirectory():
                 self.send_error(404, "Not found")
                 return
-            super().do_GET()
+            sendWebFile()
+
+        def _staysInWebDirectory(self):
+            """True if what SimpleHTTPRequestHandler would serve for this
+            request is web/ or something under it.
+
+            The check is on translate_path's answer, the path that would be
+            opened, because the parent class serves from root and collapses
+            "..": a prefix test on the URL alone let /web/../.git/config read
+            any file under root."""
+            resolved = os.path.normpath(self.translate_path(self.path))
+            allowed = os.path.normpath(webDirectory)
+            return resolved == allowed or resolved.startswith(allowed + os.sep)
 
         def _sendIndex(self):
             indexPath = os.path.join(webDirectory, "index.html")
@@ -100,7 +123,8 @@ def _makeHandler(root, title):
             self.send_header("Content-Type", contentType)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(body)
+            if self.command != "HEAD":
+                self.wfile.write(body)
 
         def end_headers(self):
             # Required for SharedArrayBuffer, which the Pyodide front-end uses

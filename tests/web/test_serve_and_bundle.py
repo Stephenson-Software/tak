@@ -79,7 +79,10 @@ def gameRoot(tmp_path):
 @pytest.fixture
 def server(gameRoot):
     httpd = serveModule.bindServer(gameRoot, "Tidewater", "TIDEWATER", "127.0.0.1", 0)
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    # shutdown() waits out one poll, and the default is half a second a test.
+    thread = threading.Thread(
+        target=httpd.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+    )
     thread.start()
     try:
         yield "http://127.0.0.1:%d" % httpd.server_address[1]
@@ -125,6 +128,72 @@ def test_everything_else_is_404(server, path):
     with pytest.raises(urllib.error.HTTPError) as error:
         get(server, path)
     assert error.value.code == 404
+
+
+def head(base, path):
+    request = urllib.request.Request(base + path, method="HEAD")
+    return urllib.request.urlopen(request, timeout=2)
+
+
+ESCAPES_FROM_WEB = [
+    "/web/../secret.txt",
+    "/web/%2e%2e/secret.txt",
+    "/web/..%2fsecret.txt",
+    "/web/sub/../../secret.txt",
+    "/web/../secret.txt?download=1",
+    "/web/./../secret.txt",
+    "/web/..",
+]
+
+
+@pytest.mark.parametrize("path", ESCAPES_FROM_WEB)
+def test_a_web_path_cannot_climb_out_of_the_web_directory(server, path):
+    with pytest.raises(urllib.error.HTTPError) as error:
+        get(server, path)
+    assert error.value.code == 404
+    assert b"not served" not in error.value.read()
+
+
+def test_a_climbing_path_that_lands_back_in_web_is_still_served(server):
+    assert get(server, "/web/sub/../game.zip").read().startswith(b"PK")
+
+
+def test_the_web_directory_itself_is_still_served(server):
+    assert b"Tidewater" in get(server, "/web/").read()
+
+
+def test_a_relative_root_is_confined_too(gameRoot, monkeypatch):
+    monkeypatch.chdir(gameRoot)
+    httpd = serveModule.bindServer(".", "Tidewater", "TIDEWATER", "127.0.0.1", 0)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = "http://127.0.0.1:%d" % httpd.server_address[1]
+    try:
+        assert get(base, "/web/game.zip").read().startswith(b"PK")
+        with pytest.raises(urllib.error.HTTPError) as error:
+            get(base, "/web/../secret.txt")
+        assert error.value.code == 404
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+@pytest.mark.parametrize(
+    "path", ["/secret.txt", "/other", "/tak/", "/tak/nope.js", "/web/../secret.txt"]
+)
+def test_head_answers_404_wherever_get_does(server, path):
+    with pytest.raises(urllib.error.HTTPError) as error:
+        head(server, path)
+    assert error.value.code == 404
+
+
+@pytest.mark.parametrize("path", ["/", "/play", "/tak/client.js", "/web/game.zip"])
+def test_head_describes_what_get_serves_and_sends_no_body(server, path):
+    body = get(server, path).read()
+    response = head(server, path)
+    assert response.status == 200
+    assert response.headers["Content-Length"] == str(len(body))
+    assert response.headers["Cross-Origin-Embedder-Policy"] == "require-corp"
+    assert response.read() == b""
 
 
 def test_missing_index_is_a_500_that_names_the_file(gameRoot):
