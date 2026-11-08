@@ -192,6 +192,18 @@ def test_http_server_serves_and_accepts_input():
         ui.cleanup()
 
 
+@pytest.mark.parametrize("path", ["/?utm_source=x", "/index.html?a=1"])
+def test_http_server_serves_the_page_when_the_url_has_a_query(path):
+    ui = makeWebUI(start_server=True, port=0)
+    try:
+        host, port = ui.address
+        url = "http://127.0.0.1:%d%s" % (port, path)
+        page = urllib.request.urlopen(url, timeout=2).read().decode("utf-8")
+        assert "Tidewater" in page
+    finally:
+        ui.cleanup()
+
+
 @pytest.mark.parametrize("method", ["GET", "POST"])
 def test_http_server_returns_404_for_unknown_paths(method):
     ui = makeWebUI(start_server=True, port=0)

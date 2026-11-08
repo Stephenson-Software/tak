@@ -127,6 +127,19 @@ def test_a_failed_delete_is_reported(tmp_path, monkeypatch):
     assert ui.dialogues == ["Failed to delete Slot 1."]
 
 
+def test_a_delete_the_filesystem_refuses_is_reported(tmp_path, monkeypatch):
+    def refuse(path):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(managerModule.shutil, "rmtree", refuse)
+    monkeypatch.setattr(managerModule, "syncBrowserSaves", lambda: None)
+    writeSlot(tmp_path, 1)
+    ui = ScriptedUI(["3", "1", "1", "4"])  # the slot is still there, so Quit is 4
+    assert chooseSlot(ui, manager(str(tmp_path)), "Tidewater", describe) is None
+    assert ui.dialogues == ["Failed to delete Slot 1."]
+    assert os.path.exists(tmp_path / "slot_1")
+
+
 # -- A new run is never written over files a slot already holds --------------
 # The browser runtime once showed an empty slot list while the slots were on
 # disk; "Create New Save (Slot 1)" would then have written over slot 1.

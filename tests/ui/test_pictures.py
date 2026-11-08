@@ -167,6 +167,17 @@ def test_server_serves_a_picture_as_png_and_404s_anything_else(tmp_path):
         ui.cleanup()
 
 
+def test_server_ignores_a_query_string_on_a_picture(tmp_path):
+    (tmp_path / "strip.png").write_bytes(PNG)
+    ui = makeWebUI(tmp_path, start_server=True)
+    try:
+        base = "http://127.0.0.1:%d" % ui.address[1]
+        response = urllib.request.urlopen(base + "/picture/strip?v=2", timeout=2)
+        assert response.read() == PNG
+    finally:
+        ui.cleanup()
+
+
 def test_the_page_tells_the_client_where_pictures_are_served(tmp_path):
     assert '"/picture/" + encodeURIComponent(key)' in makeWebUI(tmp_path).page()
 

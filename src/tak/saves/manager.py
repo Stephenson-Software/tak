@@ -224,15 +224,24 @@ class SaveFileManager:
         return os.path.join(slot_path, filename)
 
     def delete_save_slot(self, slot_number):
-        """Delete a save slot"""
+        """Delete a save slot. True if it was deleted; False if there was no
+        such slot or the filesystem refused the deletion."""
         slot_name = f"slot_{slot_number}"
         slot_path = os.path.join(self.data_directory, slot_name)
 
-        if os.path.exists(slot_path):
+        if not os.path.exists(slot_path):
+            return False
+        try:
             shutil.rmtree(slot_path)
-            # Browser storage mirrors the save directory wholesale, so a
-            # deletion has to be flushed too - otherwise the slot comes back
-            # on the next page load. A no-op outside the Pyodide front-end.
-            syncBrowserSaves()
-            return True
-        return False
+            deleted = True
+        except OSError:
+            # Refused (a slot that cannot be read is the one most likely to
+            # refuse deletion too). The caller reports the failure to the
+            # player; raising here would end the game with a traceback.
+            deleted = False
+        # Browser storage mirrors the save directory wholesale, so a deletion
+        # has to be flushed too - otherwise the slot comes back on the next
+        # page load. A refused deletion may still have removed some files, so
+        # it is flushed as well. A no-op outside the Pyodide front-end.
+        syncBrowserSaves()
+        return deleted
