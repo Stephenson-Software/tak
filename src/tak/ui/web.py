@@ -5,6 +5,7 @@ import queue
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse
 
 from tak.ui.base import PICTURE_KEY_PATTERN, BaseUserInterface
 
@@ -100,11 +101,20 @@ def _makeRequestHandler(ui):
     """Build a request handler bound to a specific WebUserInterface instance."""
 
     class _Handler(BaseHTTPRequestHandler):
+        def _route(self):
+            # The query is not part of any route: a link with a tracking
+            # parameter, or a bookmark carrying one, must still reach the
+            # page, and must not become part of a picture key. The path is
+            # not unquoted - no route needs it, and a picture key is checked
+            # against PICTURE_KEY_PATTERN as it arrives.
+            return urlparse(self.path).path
+
         def do_GET(self):
-            if self.path in ("/", "/index.html"):
+            path = self._route()
+            if path in ("/", "/index.html"):
                 self._send(200, "text/html; charset=utf-8", ui.page().encode("utf-8"))
-            elif self.path.startswith(PICTURE_ROUTE):
-                body = ui.pictureBytes(self.path[len(PICTURE_ROUTE) :])
+            elif path.startswith(PICTURE_ROUTE):
+                body = ui.pictureBytes(path[len(PICTURE_ROUTE) :])
                 if body is None:
                     self._send(404, "text/plain", b"Not found")
                 else:
@@ -112,7 +122,7 @@ def _makeRequestHandler(ui):
                     # it, so a location's picture is fetched once, not once
                     # per screen drawn there.
                     self._send(200, "image/png", body, cacheSeconds=3600)
-            elif self.path.startswith("/state"):
+            elif path.startswith("/state"):
                 state = ui.get_state()
                 self._send(200, "application/json", json.dumps(state).encode("utf-8"))
                 # Recorded only once the bytes are on the wire, so cleanup()
@@ -123,7 +133,7 @@ def _makeRequestHandler(ui):
                 self._send(404, "text/plain", b"Not found")
 
         def do_POST(self):
-            if self.path.startswith("/input"):
+            if self._route().startswith("/input"):
                 length = int(self.headers.get("Content-Length", 0))
                 raw = self.rfile.read(length) if length else b"{}"
                 try:

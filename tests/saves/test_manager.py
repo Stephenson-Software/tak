@@ -126,6 +126,20 @@ def test_delete_save_slot_removes_the_directory_and_flushes(tmp_path, monkeypatc
     assert calls == [1]
 
 
+def test_a_refused_delete_returns_false_and_still_flushes(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(managerModule, "syncBrowserSaves", lambda: calls.append(1))
+
+    def refuse(path):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(managerModule.shutil, "rmtree", refuse)
+    writeSlot(tmp_path, 1)
+    assert SaveFileManager(str(tmp_path)).delete_save_slot(1) is False
+    # Some files may already be gone, so browser storage is flushed anyway.
+    assert calls == [1]
+
+
 def test_delete_of_a_missing_slot_does_not_flush(tmp_path, monkeypatch):
     calls = []
     monkeypatch.setattr(managerModule, "syncBrowserSaves", lambda: calls.append(1))
