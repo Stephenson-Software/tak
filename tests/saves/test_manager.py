@@ -75,6 +75,38 @@ def test_list_save_files_ignores_invalid_names_and_files(tmp_path):
     assert SaveFileManager(str(tmp_path)).list_save_files() == []
 
 
+@pytest.mark.parametrize("name", ["slot_²", "slot_١", "slot_1\n"])
+def test_a_non_ascii_or_non_canonical_digit_name_is_ignored_not_fatal(tmp_path, name):
+    # str.isdigit() is true for a superscript two, which int() refuses: such a
+    # directory used to raise ValueError out of the whole save menu.
+    writeSlot(tmp_path, 2)
+    os.makedirs(os.path.join(str(tmp_path), name))
+    with open(os.path.join(str(tmp_path), name, "save.json"), "w") as f:
+        f.write("{}")
+    m = SaveFileManager(str(tmp_path))
+    assert [s["slot"] for s in m.list_save_files()] == [2]
+    assert m.get_next_available_slot() == 1
+
+
+def test_a_zero_padded_slot_directory_is_not_listed_as_that_slot(tmp_path):
+    # slot_01 used to be listed as slot 1, but get_save_path and
+    # delete_save_slot for slot 1 point at slot_1, so the listed save could be
+    # neither loaded nor deleted from the menu.
+    padded = os.path.join(str(tmp_path), "slot_01")
+    os.makedirs(padded)
+    with open(os.path.join(padded, "save.json"), "w") as f:
+        f.write("{}")
+    m = SaveFileManager(str(tmp_path))
+    assert m.list_save_files() == []
+    # Free: a new run goes into slot_1, a different directory, and slot_01
+    # is left as it was.
+    assert m.get_next_available_slot() == 1
+    writeSlot(tmp_path, 1)
+    saves = m.list_save_files()
+    assert [(s["slot"], s["slot_name"]) for s in saves] == [(1, "slot_1")]
+    assert os.path.isfile(os.path.join(padded, "save.json"))
+
+
 def test_list_save_files_oserror_handling(tmp_path, monkeypatch):
     writeSlot(tmp_path, 1)
 

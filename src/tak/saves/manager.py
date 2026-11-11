@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import shutil
 from datetime import datetime
 
@@ -10,14 +11,20 @@ from tak.saves.browser import syncBrowserSaves
 MAX_SLOTS = 99
 
 
+# Only the exact name "slot_%d" % N is a slot: ASCII digits, no leading zero.
+# str.isdigit() also accepts characters int() refuses (a superscript two), and
+# a zero-padded slot_01 would be listed as slot 1 while every other method
+# reads and deletes slot_1, a different directory.
+_SLOT_NAME = re.compile(r"slot_([1-9][0-9]*)")
+
+
 def _slot_number(entry):
-    """N for a directory entry named slot_N with 1 <= N <= MAX_SLOTS, else None."""
-    if not entry.startswith("slot_"):
+    """N for a directory entry named exactly slot_N with 1 <= N <= MAX_SLOTS,
+    else None."""
+    match = _SLOT_NAME.fullmatch(entry)
+    if match is None:
         return None
-    _, _, suffix = entry.partition("_")
-    if not suffix.isdigit():
-        return None
-    slot_index = int(suffix)
+    slot_index = int(match.group(1))
     if slot_index < 1 or slot_index > MAX_SLOTS:
         return None
     return slot_index
