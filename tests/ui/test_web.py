@@ -121,6 +121,17 @@ def test_promptForNumber_marks_screen_numeric_and_parses():
     assert box["result"] is None
 
 
+@pytest.mark.parametrize("text", ["nan", "Infinity", "-inf", "1e999"])
+def test_promptForNumber_refuses_non_finite_input(text):
+    ui = makeWebUI()
+    thread, box = runInThread(lambda: ui.promptForNumber("How many?"))
+    waitForScreen(ui, "prompt")
+    ui.submit_input(text)
+    thread.join(timeout=2)
+    assert not thread.is_alive()
+    assert box["result"] is None
+
+
 def test_showDialogue_waits_then_resets_prompt():
     ui = makeWebUI()
     ui.currentPrompt.text = "Custom"

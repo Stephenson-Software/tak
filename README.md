@@ -40,7 +40,7 @@ ui.cleanup()
 |---|---|
 | `showOptions(descriptor, options, unavailableOptions=None)` | Numbered menu; returns the chosen number as a string. Unavailable rows are listed but greyed with their reason. |
 | `showDialogue(text)` | A block of text and a Continue. |
-| `promptForText(text)` / `promptForNumber(text)` | Free-text / numeric input. `promptForNumber` returns a float, or `None` if the input was not a number. |
+| `promptForText(text)` / `promptForNumber(text)` | Free-text / numeric input. `promptForNumber` returns a finite float, or `None` if the input was not a number (`nan`, `inf` and overflowing values such as `1e999` count as not a number). |
 | `showBusy(message, seconds)` | A pause with a message, no input. |
 | `timedKeyPress(message)` | Seconds until the player reacts. |
 | `showInteractiveDialogue(npc)` | A conversation menu built from an `NPC`'s options. |

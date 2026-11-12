@@ -7,7 +7,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-from tak.ui.base import PICTURE_KEY_PATTERN, BaseUserInterface
+from tak.ui.base import PICTURE_KEY_PATTERN, BaseUserInterface, parseNumber
 
 
 # How long cleanup() gives the browser to collect the ended screen before it
@@ -355,10 +355,7 @@ class WebUserInterface(BaseUserInterface):
         # Flag the prompt as numeric so the browser can offer a numeric keyboard
         # and block submission of non-numbers (the base default can't say so).
         self._present({"type": "prompt", "text": promptText, "numeric": True})
-        try:
-            return float(self._awaitInput())
-        except (ValueError, TypeError):
-            return None
+        return parseNumber(self._awaitInput())
 
     def showBusy(self, message, seconds=1.0):
         # Published as its own screen type so the browser shows the message

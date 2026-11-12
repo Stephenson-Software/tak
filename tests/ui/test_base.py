@@ -4,7 +4,7 @@ import pytest
 
 from tak import NPC, Prompt
 from tak.ui import BaseUserInterface, unavailableMessage, unavailableSuffix
-from tak.ui.base import normalizeHeader
+from tak.ui.base import normalizeHeader, parseNumber
 from tak.ui.console import ConsoleUserInterface
 from tak.ui.web import WebUserInterface
 from tak.ui.pyodide import PyodideUserInterface, SharedArrayBufferBridge
@@ -93,6 +93,20 @@ def test_showBusy_is_inherited_and_only_waits(monkeypatch):
 def test_promptForNumber_parses_or_returns_none():
     assert ScriptedUI(["12.5"]).promptForNumber("How many?") == 12.5
     assert ScriptedUI(["twelve"]).promptForNumber("How many?") is None
+
+
+@pytest.mark.parametrize("text", ["nan", "NaN", "inf", "-inf", "Infinity", "1e999"])
+def test_promptForNumber_refuses_non_finite_input(text):
+    assert ScriptedUI([text]).promptForNumber("How many?") is None
+
+
+def test_parseNumber_returns_finite_floats_only():
+    assert parseNumber(" -3.5 ") == -3.5
+    assert parseNumber("1e308") == 1e308
+    assert parseNumber("nan") is None
+    assert parseNumber("-1e999") is None
+    assert parseNumber("") is None
+    assert parseNumber(None) is None
 
 
 def test_inherited_interactive_dialogue_uses_primitives():

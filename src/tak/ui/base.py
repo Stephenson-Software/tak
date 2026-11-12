@@ -1,3 +1,4 @@
+import math
 import re
 import time
 from abc import ABC, abstractmethod
@@ -26,6 +27,21 @@ def unavailableMessage(reason):
 # it is held to characters that can never climb out of that directory. Apply it
 # with fullmatch: Python's $ also matches before a final newline.
 PICTURE_KEY_PATTERN = re.compile(r"^[a-z0-9_-]+$")
+
+
+def parseNumber(text):
+    """What promptForNumber returns for the player's input: a finite float, or
+    None if the input was not one.
+
+    float() also accepts "nan", "inf" and overflowing values such as "1e999";
+    those come back as None too, since a game's usual guards (`is None`, a
+    comparison against a limit) would let them through to its arithmetic and
+    its save file. Shared by every front-end that parses a number."""
+    try:
+        number = float(text)
+    except (ValueError, TypeError):
+        return None
+    return number if math.isfinite(number) else None
 
 
 def _emptyHeader():
@@ -194,12 +210,10 @@ class BaseUserInterface(ABC):
         time.sleep(seconds)
 
     def promptForNumber(self, promptText):
-        """Prompt for a number via promptForText; return a float or None if the
-        player's input was not numeric. Works for every front-end."""
-        try:
-            return float(self.promptForText(promptText))
-        except (ValueError, TypeError):
-            return None
+        """Prompt for a number via promptForText; return a finite float, or None
+        if the player's input was not one (see parseNumber). Works for every
+        front-end."""
+        return parseNumber(self.promptForText(promptText))
 
     def showInteractiveDialogue(self, npc):
         """Default interactive NPC conversation built on the primitives above.
