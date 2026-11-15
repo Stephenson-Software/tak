@@ -34,7 +34,10 @@ def formatHour(hour):
 
     Raises ValueError outside 0-23 rather than wrapping: a game whose clock
     has run past 23 has a bug in its clock, and a header that silently showed
-    "12:00 AM" for hour 24 would hide it."""
+    "12:00 AM" for hour 24 would hide it. A bool is refused too: True and
+    False would otherwise look up as hours 1 and 0."""
+    if isinstance(hour, bool):
+        raise ValueError("hour must be an integer from 0 to 23, got %r" % (hour,))
     try:
         return _HOURS[hour]
     except (KeyError, TypeError):

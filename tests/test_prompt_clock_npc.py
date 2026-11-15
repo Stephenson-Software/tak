@@ -18,7 +18,7 @@ def test_formatHour_covers_the_whole_day():
     assert formatHour(23) == "11:00 PM"
 
 
-@pytest.mark.parametrize("bad", [24, -1, "8", None])
+@pytest.mark.parametrize("bad", [24, -1, "8", None, True, False])
 def test_formatHour_rejects_anything_off_the_clock(bad):
     with pytest.raises(ValueError):
         formatHour(bad)
