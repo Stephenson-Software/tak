@@ -70,6 +70,12 @@ def test_promptForNumber_parses_and_marks_the_screen_numeric(fakeJs):
     assert lastScreen(fakeJs)["numeric"] is True
 
 
+def test_promptForNumber_refuses_infinity(fakeJs):
+    ui = makePyodideUI(fakeJs)
+    fakeJs.writePlayerInput("Infinity")
+    assert ui.promptForNumber("How many?") is None
+
+
 def test_non_ascii_input_survives_the_ring(fakeJs):
     ui = makePyodideUI(fakeJs)
     fakeJs.writePlayerInput("Ægir's Boat ☠")

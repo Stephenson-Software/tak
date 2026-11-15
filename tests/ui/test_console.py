@@ -136,6 +136,13 @@ def test_promptForText_and_number(monkeypatch):
     assert ui.promptForNumber("How many?") is None
 
 
+def test_promptForNumber_refuses_nan_and_infinity(monkeypatch):
+    ui = makeConsole()
+    feed(monkeypatch, ["nan", "inf", "-inf", "1e999"])
+    for _ in range(4):
+        assert ui.promptForNumber("How many?") is None
+
+
 def test_showBusy_prints_the_message_and_waits_in_whole_seconds(monkeypatch, capsys):
     slept = []
     monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
