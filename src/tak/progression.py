@@ -28,6 +28,9 @@ REQUIRED_KEYS = ("id", "name", "announcement", "condition")
 
 class Progression:
     def __init__(self, unlocks):
+        # Materialize first: validating a one-shot iterable (a generator, a
+        # filter) would exhaust it and leave nothing to store.
+        unlocks = list(unlocks)
         seen = set()
         for unlock in unlocks:
             missing = [key for key in REQUIRED_KEYS if key not in unlock]
@@ -40,7 +43,7 @@ class Progression:
             if unlock["id"] in seen:
                 raise ValueError("unlock id %r is listed twice" % unlock["id"])
             seen.add(unlock["id"])
-        self.unlocks = list(unlocks)
+        self.unlocks = unlocks
 
     @property
     def allFeatureIds(self):
