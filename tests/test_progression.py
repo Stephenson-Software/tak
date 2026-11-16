@@ -94,6 +94,22 @@ def test_the_granted_list_the_game_owns_is_the_one_written_to():
     assert save == {"unlockedFeatures": ["shop"]}
 
 
+def test_a_generator_of_unlocks_is_kept_after_validation():
+    # Validation walks the unlocks before storing them; a one-shot iterable
+    # must not be exhausted by that walk and leave the progression empty.
+    progression = Progression(unlock for unlock in unlocks())
+    assert progression.allFeatureIds == ["shop", "home", "bank"]
+    granted = []
+    assert progression.getNextUnlock({"fish": 1, "money": 0}, granted)["id"] == "shop"
+
+
+def test_the_stored_unlocks_are_a_copy_of_the_list_given():
+    table = unlocks()
+    progression = Progression(table)
+    table.pop()
+    assert progression.allFeatureIds == ["shop", "home", "bank"]
+
+
 @pytest.mark.parametrize(
     "bad",
     [
