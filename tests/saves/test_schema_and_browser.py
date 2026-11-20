@@ -25,6 +25,18 @@ def test_validateAgainstSchema_accepts_and_rejects(tmp_path):
         validateAgainstSchema({}, str(schema))
 
 
+def test_a_malformed_schema_names_its_file(tmp_path):
+    schema = tmp_path / "broken-save-schema.json"
+    schema.write_text('{"type": "object",}')
+    with pytest.raises(json.JSONDecodeError) as error:
+        validateAgainstSchema({}, str(schema))
+    message = str(error.value)
+    assert str(schema) in message
+    # The position the decoder reported is kept, so the author can find the line.
+    assert "line 1 column 19" in message
+    assert error.value.pos == 18
+
+
 def test_getJsModule_is_none_outside_a_browser(noJs):
     assert getJsModule() is None
 
