@@ -11,6 +11,7 @@ def validateAgainstSchema(data, schemaPath):
     (e.g. a value outside the range the schema declares as valid). A game
     validates on every load *and* every save: a save that fails on the way
     out is a bug caught now, not a damaged file found next session.
+
     A schema file that is not valid JSON raises json.JSONDecodeError naming
     schemaPath, so the author knows which of a game's schemas to fix.
     """
